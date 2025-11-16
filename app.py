@@ -37,8 +37,6 @@ def prepare_data():
     gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
     ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
     df_plot = pd.read_csv("output/df_plot.csv")
-    st.write(df_plot["logistics_name"].unique())
-    st.write(df_plot.columns)
 
     ##### 2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
