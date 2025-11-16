@@ -4,5 +4,6 @@ pandas
 geopandas
 shapely
 matplotlib
+seaborn
+plotly
 folium
-ipython

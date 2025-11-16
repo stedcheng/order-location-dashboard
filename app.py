@@ -4,9 +4,10 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
 import folium
 from folium import Choropleth
-# from IPython.display import display
 import time
 import re
 import datetime
@@ -20,22 +21,27 @@ ZOOM_START = 6
 @st.cache_resource()
 def prepare_data():
     ##### 1. IMPORTING
-    # gdf1_proj = gpd.read_file("ph_datasets/PH_Adm1_Regions.shp/PH_Adm1_Regions.shp.shp")
-    # gdf2_proj = gpd.read_file("ph_datasets/PH_Adm2_ProvDists.shp/PH_Adm2_ProvDists.shp.shp")
     gdf1_proj = gpd.read_file("ph_datasets/gdf1_simplified.gpkg")
     gdf2_proj = gpd.read_file("ph_datasets/gdf2_simplified.gpkg")
-    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
+    
+    # Local
     # gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
     # gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
+    
+    # Online
     gdf3_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm3_MuniCities.shp.zip"
     gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
     gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
     gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
+    
+    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
     ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-    ph_admin_div_names = ph_admin_div_names.astype(str)
     df_plot = pd.read_csv("output/df_plot.csv")
+    st.write(df_plot["logistics_name"].unique())
+    st.write(df_plot.columns)
 
     ##### 2. DATATYPES AND FORMATTING
+    ph_admin_div_names = ph_admin_div_names.astype(str)
     for col in df_plot.columns[df_plot.columns.str.contains("PSGC")]:
         df_plot[col] = df_plot[col].astype(str)
     
@@ -81,6 +87,8 @@ def prepare_data():
     
     ##### 4. PROCESSING
     provdist_to_provdist_dict = {"CITY OF ISABELA (NOT A PROVINCE)" : "BASILAN"}
+    municity_to_provdist = pd.read_csv("ph_datasets/municity_to_provdist.csv")
+    new_municity_to_provdist_dict = dict(zip(municity_to_provdist["new_municity"], municity_to_provdist["provdist"]))
     municity_to_municity = pd.read_csv("ph_datasets/municity_to_municity.csv")
     municity_to_municity_dict = dict(zip(municity_to_municity["old"], municity_to_municity["new"]))
 
@@ -127,6 +135,11 @@ def prepare_data():
             .str.replace(r"\s+", " ", regex = True)
         )
     
+    def replace_adm2_psgc(municity):
+        provdist = new_municity_to_provdist_dict[municity]
+        adm2_psgc = gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0]
+        return adm2_psgc
+    
     # GDF 1 (Area)
     # Make a new Area column from region_area_dict and dissolve geometry by Area
     gdf1_proj["Area"] = (gdf1_proj["adm1_psgc"].astype(int) / 100000000).map(region_area_dict)
@@ -165,6 +178,12 @@ def prepare_data():
     manila_rows = (gdf3_proj["adm3_psgc"].str.startswith("13806")) & (~gdf3_proj["adm3_en"].isin(manila_dists))
     gdf3_proj.loc[manila_rows, "adm3_en"] = "MANILA"
     # gdf3_proj[gdf3_proj["adm2_psgc"] == "1300000000"]
+
+    # Fix highly urbanized cities
+    adm2_psgc_list = gdf2_proj["adm2_psgc"].unique()
+    highly_urbanized_cities_df = gdf3_proj[~gdf3_proj["adm2_psgc"].isin(adm2_psgc_list) & ~gdf3_proj["adm3_en"].str.contains("CLUSTER")]
+    mask = gdf3_proj["adm3_en"].isin(highly_urbanized_cities_df["adm3_en"])
+    gdf3_proj.loc[mask, "adm2_psgc"] = gdf3_proj.loc[mask, "adm3_en"].map(replace_adm2_psgc)
 
     # GDF 4 (Barangay)
     # Set PSGC code (city) of Manila barangays to 1380600000
@@ -345,12 +364,15 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         internal_plot_vars = ["order_count", "ordered_to_processed_mean", "processed_to_delivered_returned_mean"]
         display_plot_vars = ["Order Count", "Average Number of Hours from Ordered to Processed Status", 
                              "Average Number of Hours from Processed to Delievered Status"]
+        short_display_plot_vars = ["Order Count", "Ordered to Processed (Avg Hrs)", "Processed to Delievered (Avg Hrs)"]
         agg_funcs = ["count", "mean", "mean"]
         ascending_bools = [False, True, True]
-        display_plot_var = st.selectbox("Metric", display_plot_vars)
-        idx = display_plot_vars.index(display_plot_var)
+
+        short_display_plot_var = st.selectbox("Metric", short_display_plot_vars)
+        idx = short_display_plot_vars.index(short_display_plot_var)
         original_plot_var = original_plot_vars[idx]
         internal_plot_var = internal_plot_vars[idx]
+        display_plot_var = display_plot_vars[idx]
         ascending_bool = ascending_bools[idx]
         agg_func = agg_funcs[idx]
         agg_dict = {original_plot_var : agg_func}
@@ -390,6 +412,38 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     display_text = f"Map of {display_plot_var} {location_text} ({start_date} - {end_date})" # insert category
     st.write(display_text)
 
+    def generate_heatmap(df):
+
+        heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
+        heatmap_data.index += 1 # day of week: 0-6 -> 1-7
+        heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        
+        # st.write(heatmap_data)
+        # st.write(heatmap_long)
+        # plt.figure(figsize = (6, 4))
+        # sns.heatmap(heatmap_data, annot = True, cmap="YlOrBr", cbar=True)
+        # plt.title("Order Heatmap by Hour and Day")
+        # plt.xlabel("Hour of Day")
+        # plt.ylabel("Day of Week")
+        # st.pyplot(plt)
+        
+        fig = px.density_heatmap(heatmap_long, x = "ordered_hour", y = "ordered_dow", z = "count", 
+                                 color_continuous_scale = "YlOrBr", nbinsx = 24, nbinsy = 7)
+        fig.update_traces(hovertemplate = "Hour: %{x}<br>" + "Day: %{y}<br>" + "Count: %{z}")
+        fig.update_layout(
+            title = "Order Heatmap by Hour and Day",
+            xaxis_title = "Hour of Day",
+            yaxis_title = "Day of Week",
+            xaxis = {
+                "tickmode" : "array", "tickvals" : list(range(0, 24, 4)), "ticktext" : list(range(0, 24, 4))
+            },
+            yaxis = {
+                "tickmode" : "array", "tickvals" : list(range(1, 8)), 
+                "ticktext" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], "autorange" : "reversed"
+            }
+        )
+        st.plotly_chart(fig, use_container_width = True)
+
     status_placeholder = st.empty()
     if date_bool:
         if st.button("Generate"):
@@ -408,8 +462,11 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 city_psgc = str(gdf3_proj[(gdf3_proj["adm3_en"] == municity) & (gdf3_proj["adm2_psgc"] == province_psgc)]["adm3_psgc"].values[0])
                 display_table = gdf4_proj[gdf4_proj["adm3_psgc"] == city_psgc].copy()
                 display_table = display_table[["adm4_en"] + agg_col]
-                display_table.columns = ["Barangay", display_plot_var]
-                display_table = display_table.sort_values(by = display_plot_var, ascending = ascending_bool)
+                display_table.columns = ["Barangay", short_display_plot_var]
+                display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+                # Heatmap
+                df_filtered = df_plot[(df_plot["MuniCity"] == municity) & (df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
 
             elif input_checker["provdist"] == 1: 
                 # Aggregate
@@ -424,8 +481,11 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
                 display_table = gdf3_proj[gdf3_proj["adm2_psgc"] == province_psgc].copy()
                 display_table = display_table[["adm3_en"] + agg_col]
-                display_table.columns = ["City", display_plot_var]
-                display_table = display_table.sort_values(by = display_plot_var, ascending = ascending_bool)
+                display_table.columns = ["City", short_display_plot_var]
+                display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+                # Heatmap
+                df_filtered = df_plot[(df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
 
             elif input_checker["area"] == 1:
                 # Aggregate
@@ -439,8 +499,11 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 # Filter display table
                 display_table = gdf2_proj[gdf2_proj["Area"] == area].copy()
                 display_table = display_table[["adm2_en"] + agg_col]
-                display_table.columns = ["Province", display_plot_var]
-                display_table = display_table.sort_values(by = display_plot_var, ascending = ascending_bool)
+                display_table.columns = ["Province", short_display_plot_var]
+                display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+                # Heatmap
+                df_filtered = df_plot[df_plot["Area"] == area]
 
             else: 
                 # Aggregate
@@ -453,13 +516,19 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
 
                 # Filter display table
                 display_table = gdf1_proj[["Area"] + agg_col]
-                display_table.columns = ["Area", display_plot_var]
-                display_table = display_table.sort_values(by = display_plot_var, ascending = ascending_bool)
+                display_table.columns = ["Area", short_display_plot_var]
+                display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+                # Heatmap
+                df_filtered = df_plot
     
-        
             col1, col2 = st.columns([0.3, 0.7])
-            with col1: st.write(display_table)
-            with col2: st.components.v1.html(m._repr_html_(), height = 600)
+            with col1: 
+                st.dataframe(display_table, hide_index = True, use_container_width = True)
+            with col2: 
+                st.components.v1.html(m._repr_html_(), height = 600)
+            st.write(df_filtered)
+            generate_heatmap(df_filtered)
 
             status_placeholder.empty()
 
