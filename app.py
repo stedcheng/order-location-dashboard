@@ -17,7 +17,7 @@ st.set_page_config(layout = "wide")
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = False
+LOCAL = True
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
@@ -537,6 +537,8 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     def pipeline_country(df_plot, agg_dict, agg_col, 
                          gdf1_proj, internal_plot_var, display_plot_var, ascending_bool):
         # Aggregate
+        st.write(agg_dict)
+        st.write(df_plot)
         gdf1_agg = df_plot.groupby("Area").agg(agg_dict)
         gdf1_agg.columns = agg_col
         gdf1_proj = gdf1_proj.merge(gdf1_agg, left_on = "Area", right_index = True, how = "left")
