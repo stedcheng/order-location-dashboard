@@ -17,6 +17,7 @@ st.set_page_config(layout = "wide")
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
+LOCAL = False
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
@@ -26,14 +27,16 @@ def prepare_data():
     gdf2_proj = gpd.read_file("ph_datasets/gdf2_simplified.gpkg")
     
     # Local
-    # gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
-    # gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
+    if LOCAL:
+        gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
+        gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
     
     # Online
-    gdf3_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm3_MuniCities.shp.zip"
-    gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
-    gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
-    gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
+    else:
+        gdf3_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm3_MuniCities.shp.zip"
+        gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
+        gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
+        gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
     
     gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
     ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
@@ -208,7 +211,7 @@ def make_map(gdf_geo, internal_area_name, display_area_name, internal_plot_var, 
     the plot variable's internal and display name"""
     
     start = time.perf_counter()
-    m = folium.Map(location = location, zoom_start = zoom_start)
+    map = folium.Map(location = location, zoom_start = zoom_start)
     fill_color = "RdYlGn_r" if ascending_bool else "RdYlGn"
     Choropleth(
         geo_data = gdf_geo,
@@ -217,7 +220,7 @@ def make_map(gdf_geo, internal_area_name, display_area_name, internal_plot_var, 
         key_on = "feature.properties." + internal_area_name,
         fill_color = fill_color,
         legend_name = display_plot_var
-    ).add_to(m)
+    ).add_to(map)
     end = time.perf_counter()
     print(f"Elapsed time for Map: {end - start:.4f} seconds")
 
@@ -237,11 +240,11 @@ def make_map(gdf_geo, internal_area_name, display_area_name, internal_plot_var, 
             style = "font-size: 12px;"
         )
     ).add_to(feature_group)
-    m.add_child(feature_group)
+    map.add_child(feature_group)
     end = time.perf_counter()
     print(f"Elapsed time for Label: {end - start:.4f} seconds")
     
-    return m
+    return map
 
 def calculate_geo_centroid(gdf_proj, col_name, col_value):
     """Calculates the geographical centroid given the geodataframe wih projected coordinates"""
@@ -272,8 +275,8 @@ def make_map_country(gdf1_proj, internal_plot_var, display_plot_var, ascending_b
     # Convert projected to geographic
     gdf1_geo = gdf1_proj.to_crs(epsg = 4326)
 
-    m = make_map(gdf1_geo, "Area", "Area", internal_plot_var, display_plot_var, ascending_bool)
-    return m
+    map = make_map(gdf1_geo, "Area", "Area", internal_plot_var, display_plot_var, ascending_bool)
+    return map
 
 def make_map_area(area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool):
     """Zooms in to an area and plots a variable per province"""
@@ -291,8 +294,8 @@ def make_map_area(area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_va
     end = time.perf_counter()
     print(f"Elapsed time for Filtering: {end - start:.4f} seconds")
 
-    m = make_map(gdf2_geo_filtered, "adm2_en", "Province", internal_plot_var, display_plot_var, ascending_bool, centroid, 9)
-    return m
+    map = make_map(gdf2_geo_filtered, "adm2_en", "Province", internal_plot_var, display_plot_var, ascending_bool, centroid, 9)
+    return map
 
 def make_map_province(provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool):
     """Zooms in to a province and plots a variable per municipality / city"""
@@ -313,8 +316,8 @@ def make_map_province(provdist, gdf2_proj, gdf3_proj, internal_plot_var, display
     end = time.perf_counter()
     print(f"Elapsed time for Filtering: {end - start:.4f} seconds")
 
-    m = make_map(gdf3_geo_filtered, "adm3_en", "City", internal_plot_var, display_plot_var, ascending_bool, centroid, 11)
-    return m
+    map = make_map(gdf3_geo_filtered, "adm3_en", "City", internal_plot_var, display_plot_var, ascending_bool, centroid, 11)
+    return map
 
 def make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool):
     """Zooms in to a municipality / city and plots a variable per barangay / submunicipality"""
@@ -336,8 +339,8 @@ def make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_
     end = time.perf_counter()
     print(f"Elapsed time for Filtering: {end - start:.4f} seconds")
 
-    m = make_map(gdf4_geo_filtered, "adm4_en", "Barangay", internal_plot_var, display_plot_var, ascending_bool, centroid, 13)
-    return m
+    map = make_map(gdf4_geo_filtered, "adm4_en", "Barangay", internal_plot_var, display_plot_var, ascending_bool, centroid, 13)
+    return map
 
 def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     st.title("Location Data")
@@ -353,6 +356,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         category_options = ["ED", "HL", "PE", "WL", "uncategorized"]
         categories = st.multiselect("Category", category_options, default = category_options)
 
+        df_plot_all = df_plot.copy()
         df_plot = df_plot[
             (df_plot["ordered_date"] >= pd.to_datetime(start_date)) & 
             (df_plot["ordered_date"] <= pd.to_datetime(end_date)) & 
@@ -360,23 +364,64 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         ]
 
         ##### 2. PLOT VARIABLE
-        original_plot_vars = ["id", "ordered_to_processed", "processed_to_delivered_returned"]
-        internal_plot_vars = ["order_count", "ordered_to_processed_mean", "processed_to_delivered_returned_mean"]
-        display_plot_vars = ["Order Count", "Average Number of Hours from Ordered to Processed Status", 
-                             "Average Number of Hours from Processed to Delievered Status"]
-        short_display_plot_vars = ["Order Count", "Ordered to Processed (Avg Hrs)", "Processed to Delievered (Avg Hrs)"]
-        agg_funcs = ["count", "mean", "mean"]
-        ascending_bools = [False, True, True]
+        metrics = [
+            {
+                "original": "id",
+                "internal": "order_count",
+                "display": "Order Count",
+                "short_display": "Order Count",
+                "agg_func": "count",
+                "ascending": False,
+                "unit": "Count",
+                "extra_agg": {"fast_order": "sum"},
+                "extra_cols": ["fast_order_count"],
+                "extra_cols_short_display": ["Fast Order Count"]
+            },
+            {
+                "original": "ordered_to_processed",
+                "internal": "ordered_to_processed_mean",
+                "display": "Average Number of Hours from Ordered to Processed Status",
+                "short_display": "Ordered to Processed (Avg Hrs)",
+                "agg_func": "mean",
+                "ascending": True,
+                "unit": "Hours",
+            },
+            {
+                "original": "processed_to_delivered_returned",
+                "internal": "processed_to_delivered_returned_mean",
+                "display": "Average Number of Hours from Processed to Delievered Status",
+                "short_display": "Processed to Delievered (Avg Hrs)",
+                "agg_func": "mean",
+                "ascending": True,
+                "unit": "Hours",
+            },
+            {   
+                "original": "ordered_to_delivered_returned",
+                "internal": "ordered_to_delivered_returned_mean",
+                "display": "Average Number of Hours from Ordered to Delivered Status",
+                "short_display": "Ordered to Delivered (Avg Hrs)",
+                "agg_func": "mean",
+                "ascending": True,
+                "unit": "Hours",
+            }
+        ]
 
-        short_display_plot_var = st.selectbox("Metric", short_display_plot_vars)
-        idx = short_display_plot_vars.index(short_display_plot_var)
-        original_plot_var = original_plot_vars[idx]
-        internal_plot_var = internal_plot_vars[idx]
-        display_plot_var = display_plot_vars[idx]
-        ascending_bool = ascending_bools[idx]
-        agg_func = agg_funcs[idx]
+        short_display_plot_var = st.selectbox("Metric", [m["short_display"] for m in metrics])
+        metric = next(m for m in metrics if m["short_display"] == short_display_plot_var)
+        original_plot_var = metric["original"]
+        internal_plot_var = metric["internal"]
+        display_plot_var = metric["display"]
+        ascending_bool = metric["ascending"]
+        agg_func = metric["agg_func"]
+        unit = metric["unit"]
+
         agg_dict = {original_plot_var : agg_func}
         agg_col = [internal_plot_var]
+        table_display_plot_var = [short_display_plot_var]
+        if "extra_agg" in metric:
+            agg_dict.update(metric["extra_agg"])
+            agg_col.extend(metric.get("extra_cols", []))
+            table_display_plot_var.extend(metric.get("extra_cols_short_display", []))
 
         ##### 3. LOCATION
         input_checker = {"area" : 0, "provdist" : 0, "municity" : 0}
@@ -419,17 +464,23 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         if st.button("Generate"):
             st.session_state.generated = True
             st.session_state.last_filters = current_filters
-
-    # Map text   
-    if input_checker["municity"] == 1: 
-        location_text = f"for {municity}, {provdist}"
-    elif input_checker["provdist"] == 1: 
-        location_text = f"for {provdist}"
-    elif input_checker["area"] == 1:
-        location_text = f"for {area}"
-    else: 
-        location_text = f"for the Philippines"
-    map_text = f"Map of {display_plot_var} {location_text} ({start_date} - {end_date})" # insert categories
+   
+    # Functions
+    def generate_location_text(area, provdist, municity):
+        if input_checker["municity"] == 1: 
+            location_text = f"{municity}, {provdist}"
+        elif input_checker["provdist"] == 1: 
+            location_text = provdist
+        elif input_checker["area"] == 1:
+            location_text = area
+        else: 
+            location_text = "the Philippines"
+        return location_text
+    
+    def generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date):
+        location_text = generate_location_text(area, provdist, municity)
+        map_text = f"Map of {display_plot_var} for {location_text} ({start_date} - {end_date})" # insert categories
+        return map_text
 
     def generate_heatmap(df):
 
@@ -483,126 +534,220 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         )
         st.plotly_chart(fig, use_container_width = True)
 
-    # Display
-    status_placeholder = st.empty()
-    if date_bool and st.session_state.generated:
-        status_placeholder.write("Generating...")
-        if input_checker["municity"] == 1: 
-            # Aggregate
-            gdf4_agg = df_plot.groupby("BgySubmunPSGC").agg(agg_dict)
-            gdf4_agg.columns = agg_col
-            gdf4_proj = gdf4_proj.merge(gdf4_agg, left_on = "adm4_psgc", right_index = True, how = "left")
-            
-            # Make map
-            m = make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
+    def pipeline_country(df_plot, agg_dict, agg_col, 
+                         gdf1_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf1_agg = df_plot.groupby("Area").agg(agg_dict)
+        gdf1_agg.columns = agg_col
+        gdf1_proj = gdf1_proj.merge(gdf1_agg, left_on = "Area", right_index = True, how = "left")
 
-            # Filter display table
-            province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
-            city_psgc = str(gdf3_proj[(gdf3_proj["adm3_en"] == municity) & (gdf3_proj["adm2_psgc"] == province_psgc)]["adm3_psgc"].values[0])
-            display_table = gdf4_proj[gdf4_proj["adm3_psgc"] == city_psgc].copy()
-            display_table = display_table[["adm4_en"] + agg_col]
-            display_table.columns = ["Barangay", short_display_plot_var]
-            display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+        # Make map
+        map = make_map_country(gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
 
-            # Heatmap
-            df_filtered = df_plot[(df_plot["MuniCity"] == municity) & (df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
+        # Filter display table
+        display_table = gdf1_proj[["Area"] + agg_col]
+        display_table.columns = ["Area"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
 
-        elif input_checker["provdist"] == 1: 
-            # Aggregate
-            gdf3_agg = df_plot.groupby("MuniCityPSGC").agg(agg_dict)
-            gdf3_agg.columns = agg_col
-            gdf3_proj = gdf3_proj.merge(gdf3_agg, left_on = "adm3_psgc", right_index = True, how = "left")
-            
-            # Make map
-            m = make_map_province(provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
+        # Heatmap
+        df_filtered = df_plot
 
-            # Filter display table
-            province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
-            display_table = gdf3_proj[gdf3_proj["adm2_psgc"] == province_psgc].copy()
-            display_table = display_table[["adm3_en"] + agg_col]
-            display_table.columns = ["City", short_display_plot_var]
-            display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+        return map, display_table, df_filtered
+    
+    def pipeline_area(df_plot, agg_dict, agg_col,
+                      area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf2_agg = df_plot.groupby("ProvDistPSGC").agg(agg_dict)
+        gdf2_agg.columns = agg_col
+        gdf2_proj = gdf2_proj.merge(gdf2_agg, left_on = "adm2_psgc", right_index = True, how = "left")
+        
+        # Make map
+        map = make_map_area(area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
 
-            # Heatmap
-            df_filtered = df_plot[(df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
+        # Filter display table
+        display_table = gdf2_proj[gdf2_proj["Area"] == area].copy()
+        display_table = display_table[["adm2_en"] + agg_col]
+        display_table.columns = ["Province"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
 
-        elif input_checker["area"] == 1:
-            # Aggregate
-            gdf2_agg = df_plot.groupby("ProvDistPSGC").agg(agg_dict)
-            gdf2_agg.columns = agg_col
-            gdf2_proj = gdf2_proj.merge(gdf2_agg, left_on = "adm2_psgc", right_index = True, how = "left")
-            
-            # Make map
-            m = make_map_area(area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
+        # Heatmap
+        df_filtered = df_plot[df_plot["Area"] == area]
 
-            # Filter display table
-            display_table = gdf2_proj[gdf2_proj["Area"] == area].copy()
-            display_table = display_table[["adm2_en"] + agg_col]
-            display_table.columns = ["Province", short_display_plot_var]
-            display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+        return map, display_table, df_filtered
 
-            # Heatmap
-            df_filtered = df_plot[df_plot["Area"] == area]
+    def pipeline_province(df_plot, agg_dict, agg_col, 
+                          provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf3_agg = df_plot.groupby("MuniCityPSGC").agg(agg_dict)
+        gdf3_agg.columns = agg_col
+        gdf3_proj = gdf3_proj.merge(gdf3_agg, left_on = "adm3_psgc", right_index = True, how = "left")
+        
+        # Make map
+        map = make_map_province(provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
 
-        else: 
-            # Aggregate
-            gdf1_agg = df_plot.groupby("Area").agg(agg_dict)
-            gdf1_agg.columns = agg_col
-            gdf1_proj = gdf1_proj.merge(gdf1_agg, left_on = "Area", right_index = True, how = "left")
+        # Filter display table
+        province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
+        display_table = gdf3_proj[gdf3_proj["adm2_psgc"] == province_psgc].copy()
+        display_table = display_table[["adm3_en"] + agg_col]
+        display_table.columns = ["City"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
 
-            # Make map
-            m = make_map_country(gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
+        # Heatmap
+        df_filtered = df_plot[(df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
 
-            # Filter display table
-            display_table = gdf1_proj[["Area"] + agg_col]
-            display_table.columns = ["Area", short_display_plot_var]
-            display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+        return map, display_table, df_filtered
+    
+    def pipeline_city(df_plot, agg_dict, agg_col,
+                      provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf4_agg = df_plot.groupby("BgySubmunPSGC").agg(agg_dict)
+        gdf4_agg.columns = agg_col
+        gdf4_proj = gdf4_proj.merge(gdf4_agg, left_on = "adm4_psgc", right_index = True, how = "left")
+        
+        # Make map
+        map = make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
 
-            # Heatmap
-            df_filtered = df_plot
+        # Filter display table
+        province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
+        city_psgc = str(gdf3_proj[(gdf3_proj["adm3_en"] == municity) & (gdf3_proj["adm2_psgc"] == province_psgc)]["adm3_psgc"].values[0])
+        display_table = gdf4_proj[gdf4_proj["adm3_psgc"] == city_psgc].copy()
+        display_table = display_table[["adm4_en"] + agg_col]
+        display_table.columns = ["Barangay"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
 
-        # After filtering for location, remove duplicate ID rows
+        # Heatmap
+        df_filtered = df_plot[(df_plot["MuniCity"] == municity) & (df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
+
+        return map, display_table, df_filtered
+
+    display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
+                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug"]
+    display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered Date",
+                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category"]
+    def filter_duplicate_ids(df_filtered):
         df_filtered_no_duplicates = df_filtered.drop_duplicates(keep = "first", subset = ["id"])
         counts = df_filtered["id"].value_counts()
         multiple = counts[counts >= 2].index
         df_filtered_duplicate_ids = df_filtered[df_filtered["id"].isin(multiple)]
-        display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
-                                "ordered_to_processed", "processed_to_delivered_returned", "category_slug"]
-        display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered/Returned Date",
-                                "Ordered-to-Processed", "Processed-to-Delivered/Returned", "Category"]
         df_filtered_no_duplicates_display = df_filtered_no_duplicates[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
         df_filtered_duplicate_ids_display = df_filtered_duplicate_ids[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
-        
-        # Visuals
-        st.header("Visuals")
-        col1, col2 = st.columns([0.3, 0.7])
-        with col1: st.subheader("Metrics Table")
-        with col2: st.subheader(map_text)
-        col1, col2 = st.columns([0.3, 0.7])
-        with col1: 
-            st.dataframe(display_table, hide_index = True, use_container_width = True)
-            st.write(f"Number of Multiple-Item Orders: {len(multiple)}")
-            st.write(f"Number of Rows Removed due to Multiple-Item Orders: {len(df_filtered) - len(df_filtered_no_duplicates)}")
-        with col2: 
-            st.components.v1.html(m._repr_html_(), height = 600)
-        generate_heatmap(df_filtered_no_duplicates)
+        return multiple, df_filtered_no_duplicates, df_filtered_duplicate_ids, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display
 
-        # Tables
-        st.header("Tables")
-        columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
-        if len(columns) > 0:
-            st.subheader("Unique Order IDs")
-            st.dataframe(df_filtered_no_duplicates_display[columns], hide_index = True)
-            st.subheader("Duplicate Order IDs")
-            st.dataframe(df_filtered_duplicate_ids_display[columns], hide_index = True)
+    # Display
+    tab1, tab2 = st.tabs(["Home", "Trends"])
+
+    with tab1:
+        status_placeholder = st.empty()
+        if date_bool and st.session_state.generated:
+            status_placeholder.write("Generating...")
+            if input_checker["municity"] == 1: 
+                map, display_table, df_filtered = pipeline_city(df_plot, agg_dict, agg_col,
+                                                                provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
+            elif input_checker["provdist"] == 1: 
+                map, display_table, df_filtered = pipeline_province(df_plot, agg_dict, agg_col, 
+                                                                    provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
+            elif input_checker["area"] == 1:
+                map, display_table, df_filtered = pipeline_area(df_plot, agg_dict, agg_col,
+                                                                area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
+            else: 
+                map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
+                                                                   gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
+
+            # After filtering for location, remove duplicate ID rows
+            multiple, df_filtered_no_duplicates, df_filtered_duplicate_ids, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
+            
+            # Visuals
+            st.header("Visuals")
+            col1, col2 = st.columns([0.3, 0.7])
+            with col1: st.subheader("Metrics Table")
+            with col2: 
+                map_text = generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date)
+                st.subheader(map_text)
+            col1, col2 = st.columns([0.3, 0.7])
+            with col1: 
+                st.dataframe(display_table, hide_index = True, use_container_width = True)
+                st.write(f"Number of Multiple-Item Orders: {len(multiple)}")
+                st.write(f"Number of Rows Removed due to Multiple-Item Orders: {len(df_filtered) - len(df_filtered_no_duplicates)}")
+            with col2: 
+                st.components.v1.html(map._repr_html_(), height = 600)
+            generate_heatmap(df_filtered_no_duplicates)
+
+            # Tables
+            st.header("Tables")
+            columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
+            if len(columns) > 0:
+                st.subheader("Unique Order IDs")
+                st.dataframe(df_filtered_no_duplicates_display[columns], hide_index = True)
+                st.subheader("Duplicate Order IDs")
+                st.dataframe(df_filtered_duplicate_ids_display[columns], hide_index = True)
+            else:
+                st.write("No columns have been selected.")
+            
+            status_placeholder.empty()
+
+        elif not date_bool:
+            st.warning("Start date must be earlier than end date. Please check your input.")
         else:
-            st.write("No columns have been selected.")
+            st.info("Please generate the dashboard using the settings in the sidebar.")
         
-        status_placeholder.empty()
+    with tab2:
+        
+        if municity is not None: df_plot_all = df_plot_all[(df_plot_all["Area"] == area) & (df_plot_all["ProvDist"] == provdist) & (df_plot_all["MuniCity"] == municity)]
+        elif provdist is not None: df_plot_all = df_plot_all[(df_plot_all["Area"] == area) & (df_plot_all["ProvDist"] == provdist)]
+        elif area is not None: df_plot_all = df_plot_all[df_plot_all["Area"] == area]
+        # else: country (no filter)
 
-    elif not date_bool:
-        st.warning("Start date must be earlier than end date. Please check your input.")
-    else:
-        st.info("Please generate the dashboard using the settings in the sidebar.")
+        level = st.selectbox("Granularity", ["Day", "Week", "Month", "Quarter"], index = 2)
+        df_plot_all["year"] = df_plot_all["ordered_date"].dt.year
+        df_plot_all["quarter"] = df_plot_all["ordered_date"].dt.quarter
+        df_plot_all["month"] = df_plot_all["ordered_date"].dt.month
+        df_plot_all["week"] = df_plot_all["ordered_date"].dt.isocalendar().week
+        df_plot_all["day"] = df_plot_all["ordered_date"].dt.day
+
+        if level == "Quarter": groupby_vars = ["year", "quarter"]
+        elif level == "Month": groupby_vars = ["year", "month"]
+        elif level == "Week": groupby_vars = ["year", "week"]
+        elif level == "Day": groupby_vars = ["year", "month", "day"]
+        df_plot_agg = df_plot_all.groupby(groupby_vars).agg(agg_dict).reset_index()
+
+        if level == "Quarter":
+            df_plot_agg["label"] = df_plot_agg.apply(lambda row: f"{int(row["year"])}-Q{int(row["quarter"])}", axis = 1)
+            df_plot_agg.drop(columns = ["year", "quarter"], inplace = True)
+        elif level == "Month":
+            df_plot_agg["label"] = df_plot_agg.apply(lambda row: f"{int(row["year"])}-{"0" if row["month"] < 10 else ""}{int(row["month"])}", axis = 1)
+            df_plot_agg.drop(columns = ["year", "month"], inplace = True)
+        elif level == "Week":
+            df_plot_agg["label"] = df_plot_agg.apply(lambda row: (datetime.datetime.fromisocalendar(int(row["year"]), int(row["week"]), 7) - datetime.timedelta(days = 7)).strftime("%Y-%m-%d"), axis = 1)
+            df_plot_agg.drop(columns = ["year", "week"], inplace = True)
+        else:
+            df_plot_agg["label"] = pd.to_datetime(df_plot_agg[["year", "month", "day"]]).dt.strftime("%Y-%m-%d")
+            df_plot_agg.drop(columns = ["year", "month", "day"], inplace = True)
+    
+        df_plot_agg = pd.melt(df_plot_agg, id_vars = "label", 
+                              value_vars = list(df_plot_agg.columns).remove("label"), 
+                              var_name = "variable", value_name = "value")
+
+        replace_dict = dict(zip(
+            [metric["original"] for metric in metrics], 
+            [metric["short_display"] for metric in metrics]
+        ))
+        replace_dict["fast_order"] = "Fast Order Count"
+        df_plot_agg["variable"].replace(replace_dict, inplace = True)
+
+        fig = px.line(df_plot_agg, x = "label", y = "value", color = "variable",
+            title = f"{display_plot_var} by {level} for {generate_location_text(area, provdist, municity)}",
+            labels = {"date": "Date", "value": display_plot_var}, markers = True
+        )
+
+        fig.update_layout(
+            xaxis_title = "Date",
+            yaxis_title = short_display_plot_var,
+            template = "plotly_white",
+            legend_title_text = "Legend"
+        )
+        if level != "Day":
+            fig.update_xaxes(tickvals = df_plot_agg["label"], ticktext = df_plot_agg["label"])
+
+        st.plotly_chart(fig, use_container_width = True)
     
 user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj)
