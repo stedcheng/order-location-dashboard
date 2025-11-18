@@ -640,6 +640,9 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
 
     with tab1:
         status_placeholder = st.empty()
+        st.write("------")
+        st.write(df_plot)
+        st.write("------")
         if date_bool and st.session_state.generated:
             status_placeholder.write("Generating...")
             if input_checker["municity"] == 1: 
