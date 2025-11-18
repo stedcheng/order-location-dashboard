@@ -17,7 +17,7 @@ st.set_page_config(layout = "wide")
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = False
+LOCAL = True
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
@@ -482,30 +482,18 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         map_text = f"Map of {display_plot_var} for {location_text} ({start_date} - {end_date})" # insert categories
         return map_text
 
-    def generate_heatmap(df):
+    blue_vibrant = [
+        [0.0, "rgb(230, 245, 255)"],
+        [0.3, "rgb(90, 170, 255)"],
+        [0.6, "rgb(0, 90, 200)"],
+        [1.0, "rgb(0, 0, 90)"]
+    ]
+
+    def generate_heatmap_hour_dow(df):
 
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
-        heatmap_data.index += 1 # day of week: 0-6 -> 1-7
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
         
-        # st.write(heatmap_data)
-        # st.write(heatmap_long)
-        # plt.figure(figsize = (6, 4))
-        # sns.heatmap(heatmap_data, annot = True, cmap="YlOrBr", cbar=True)
-        # plt.title("Order Heatmap by Hour and Day")
-        # plt.xlabel("Hour of Day")
-        # plt.ylabel("Day of Week")
-        # st.pyplot(plt)
-        
-        # fig = px.density_heatmap(heatmap_long, x = "ordered_hour", y = "ordered_dow", z = "count", 
-        #                          color_continuous_scale = "YlOrBr", nbinsx = 24, nbinsy = 7)
-
-        blue_vibrant = [
-            [0.0, "rgb(230, 245, 255)"],
-            [0.3, "rgb(90, 170, 255)"],
-            [0.6, "rgb(0, 90, 200)"],
-            [1.0, "rgb(0, 0, 90)"]
-        ]
         fig = go.Figure(
             data = go.Heatmap(
                 x = heatmap_long["ordered_hour"],
@@ -528,8 +516,40 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 "tickmode" : "array", "tickvals" : list(range(0, 24, 4)), "ticktext" : list(range(0, 24, 4))
             },
             yaxis = {
-                "tickmode" : "array", "tickvals" : list(range(1, 8)), 
-                "ticktext" : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], "autorange" : "reversed"
+                "tickmode" : "array", "tickvals" : list(range(7)), 
+                "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
+            }
+        )
+        st.plotly_chart(fig, use_container_width = True)
+
+    def generate_heatmap_month_dow(df):
+        heatmap_data = df.groupby(["ordered_dow", "ordered_month"]).size().unstack(fill_value = 0)
+        heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+
+        fig = go.Figure(
+            data = go.Heatmap(
+                x = heatmap_long["ordered_month"],
+                y = heatmap_long["ordered_dow"],
+                z = heatmap_long["count"],
+                colorscale = blue_vibrant,
+                hovertemplate = "Month: %{x}<br>Day: %{y}<br>Count: %{z}",
+                xgap = 1,   # horizontal border
+                ygap = 1,    # vertical border
+                name = ""
+            )
+        )
+
+        # fig.update_traces(hovertemplate = "Hour: %{x}<br>" + "Day: %{y}<br>" + "Count: %{z}")
+        fig.update_layout(
+            title = "Order Heatmap by Month and Day",
+            xaxis_title = "Month",
+            yaxis_title = "Day of Week",
+            xaxis = {
+                "tickmode" : "array", "tickvals" : list(range(7, 12, 1)), "ticktext" : list(range(7, 12, 1))
+            },
+            yaxis = {
+                "tickmode" : "array", "tickvals" : list(range(7)), 
+                "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
             }
         )
         st.plotly_chart(fig, use_container_width = True)
@@ -670,7 +690,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 st.write(f"Number of Rows Removed due to Multiple-Item Orders: {len(df_filtered) - len(df_filtered_no_duplicates)}")
             with col2: 
                 st.components.v1.html(map._repr_html_(), height = 600)
-            generate_heatmap(df_filtered_no_duplicates)
+            generate_heatmap_hour_dow(df_filtered_no_duplicates)
 
             # Tables
             st.header("Tables")
@@ -749,5 +769,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             fig.update_xaxes(tickvals = df_plot_agg["label"], ticktext = df_plot_agg["label"])
 
         st.plotly_chart(fig, use_container_width = True)
+
+        generate_heatmap_month_dow(df_plot_all)
     
 user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj)
