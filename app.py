@@ -17,7 +17,7 @@ st.set_page_config(layout = "wide")
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = True
+LOCAL = False
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
