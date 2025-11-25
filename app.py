@@ -493,49 +493,78 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     ]
 
     def generate_heatmap_hour_dow(df):
-
+        # Preprocessing
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
         heatmap_data = heatmap_data.reindex(columns = range(24), fill_value = 0)
+        row_totals = heatmap_data.sum(axis = 1)
+        col_totals = heatmap_data.sum(axis = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
-        
-        fig = go.Figure(
-            data = go.Heatmap(
-                x = heatmap_long["ordered_hour"],
-                y = heatmap_long["ordered_dow"],
-                z = heatmap_long["count"],
-                colorscale = blue_vibrant,
-                hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}",
-                xgap = 1,   # horizontal border
-                ygap = 1,    # vertical border
-                name = ""
+
+        # Heatmap and "subplots"
+        fig = go.Figure()
+        fig.add_trace(go.Heatmap(
+            x = list(range(24)), y = list(range(7)), z = heatmap_data.values, 
+            colorscale = blue_vibrant,
+            hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}", 
+            xgap = 1, ygap = 1, name = "",
+            xaxis = "x", yaxis = "y2"
+        ))
+        fig.add_trace(go.Bar(
+            x = [0] * len(row_totals), y = list(range(7)), 
+            orientation = "h", showlegend = False, 
+            marker_color = "rgba(0,0,0,0.4)", opacity = 0.6,
+            xaxis = "x2", yaxis = "y"
+        ))
+        fig.add_trace(go.Bar(
+            x = list(range(24)), y = [0] * len(col_totals), 
+            orientation = "v", showlegend = False, 
+            marker_color = "rgba(0,0,0,0.4)", opacity = 0.6, 
+            xaxis = "x", yaxis = "y"  
+        ))
+        fig.update_layout(
+            xaxis = dict(
+                domain = [0, 0.95],
+                anchor = "y2",
+                title = "Hour of Day",
+                side = "top",
+                tickvals = list(range(24))
+            ),
+            xaxis2 = dict(
+                domain = [0.98, 1],
+                showticklabels = False
+            ), 
+            yaxis = dict(
+                domain = [0, 0.05],
+                showticklabels = False,
+            ),
+            yaxis2 = dict(
+                domain = [0.1, 1],
+                tickmode = "array",
+                tickvals = list(range(7)),
+                ticktext = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                autorange = "reversed",
+                title = "Day of Week"
+            ),
+            title = dict(
+                text = f"Order Heatmap by Hour and Day for {generate_location_text(area, provdist, municity)}",
+                x = 0, y = 0.97, xanchor = "left", yanchor = "top"
             )
         )
-
+        
+        # Annotations
         threshold = heatmap_long["count"].median()
         for _, row in heatmap_long.iterrows():
             color = "white" if row["count"] > threshold else "black"
-            fig.add_annotation(
-                x = row["ordered_hour"],
-                y = row["ordered_dow"],
-                text = str(row["count"]),
-                showarrow = False,
-                font = {"size" : 16, "color" : color},
-                # xref = "x",
-                # yref = "y"
-            )
-
-        fig.update_layout(
-            title = f"Order Heatmap by Hour and Day for {generate_location_text(area, provdist, municity)}",
-            xaxis_title = "Hour of Day",
-            yaxis_title = "Day of Week",
-            xaxis = {
-                "tickmode" : "array", "tickvals" : list(range(0, 24, 4)), "ticktext" : list(range(0, 24, 4))
-            },
-            yaxis = {
-                "tickmode" : "array", "tickvals" : list(range(7)), 
-                "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
-            }
-        )
+            fig.add_annotation(x = row["ordered_hour"], y = row["ordered_dow"], text = row["count"],
+                               showarrow = False, font = {"size" : 16, "color" : color},
+                               xref = "x", yref = "y2")
+        annotation_font = {"size" : 16, "color" : "black"}
+        for hour, total in col_totals.items(): # col totals
+            fig.add_annotation(x = hour, y = 0, text = total, showarrow = False, font = annotation_font, xref = "x", yref = "y")
+        for dow, total in row_totals.items(): # row totals
+            fig.add_annotation(x = 0, y = dow, text = total, showarrow = False, font = annotation_font, xref = "x2", yref = "y2")
+        fig.add_annotation(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False, font = annotation_font, xref = "x2", yref = "y")
+        
         st.plotly_chart(fig, use_container_width = True)
 
     def generate_heatmap_month_dow(df):
