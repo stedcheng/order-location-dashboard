@@ -658,7 +658,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             [metric["short_display"] for metric in metrics]
         ))
         replace_dict["fast_order"] = "Fast Order Count"
-        df_plot_agg["variable"].replace(replace_dict, inplace = True)
+        df_plot_agg["variable"] = df_plot_agg["variable"].replace(replace_dict)
 
         fig = px.line(df_plot_agg, x = "label", y = "value", color = "variable",
             title = f"{display_plot_var} by {level} for {generate_location_text(area, provdist, municity)}",
