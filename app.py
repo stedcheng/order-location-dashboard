@@ -20,7 +20,6 @@ st.set_page_config(layout = "wide")
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
 LOCAL = st.secrets.get("LOCAL", False)
-st.write("LOCAL flag:", LOCAL)
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
