@@ -344,6 +344,7 @@ def make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_
     map = make_map(gdf4_geo_filtered, "adm4_en", "Barangay", internal_plot_var, display_plot_var, ascending_bool, centroid, 13)
     return map
 
+##### C. USER INPUT
 def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     st.title("Location Data")
     with st.sidebar:
@@ -358,7 +359,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         category_options = ["ED", "HL", "PE", "WL", "uncategorized"]
         categories = st.multiselect("Category", category_options, default = category_options)
 
-        df_plot_all = df_plot.copy()
+        df_plot_trends = df_plot.copy()
         df_plot = df_plot[
             (df_plot["ordered_date"] >= pd.to_datetime(start_date)) & 
             (df_plot["ordered_date"] <= pd.to_datetime(end_date)) & 
@@ -481,7 +482,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     
     def generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date):
         location_text = generate_location_text(area, provdist, municity)
-        map_text = f"Map of {display_plot_var} for {location_text} ({start_date} - {end_date})" # insert categories
+        map_text = f"Map of {display_plot_var} for {location_text} ({start_date} – {end_date})" # insert categories
         return map_text
 
     blue_vibrant = [
@@ -494,6 +495,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
     def generate_heatmap_hour_dow(df):
 
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
+        heatmap_data = heatmap_data.reindex(columns = range(24), fill_value = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
         
         fig = go.Figure(
@@ -502,16 +504,28 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 y = heatmap_long["ordered_dow"],
                 z = heatmap_long["count"],
                 colorscale = blue_vibrant,
-                hovertemplate = "Hour: %{x}<br>Day: %{y}<br>Count: %{z}",
+                hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}",
                 xgap = 1,   # horizontal border
                 ygap = 1,    # vertical border
                 name = ""
             )
         )
 
-        # fig.update_traces(hovertemplate = "Hour: %{x}<br>" + "Day: %{y}<br>" + "Count: %{z}")
+        threshold = heatmap_long["count"].median()
+        for _, row in heatmap_long.iterrows():
+            color = "white" if row["count"] > threshold else "black"
+            fig.add_annotation(
+                x = row["ordered_hour"],
+                y = row["ordered_dow"],
+                text = str(row["count"]),
+                showarrow = False,
+                font = {"size" : 16, "color" : color},
+                # xref = "x",
+                # yref = "y"
+            )
+
         fig.update_layout(
-            title = "Order Heatmap by Hour and Day",
+            title = f"Order Heatmap by Hour and Day for {generate_location_text(area, provdist, municity)}",
             xaxis_title = "Hour of Day",
             yaxis_title = "Day of Week",
             xaxis = {
@@ -526,24 +540,42 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
 
     def generate_heatmap_month_dow(df):
         heatmap_data = df.groupby(["ordered_dow", "ordered_month"]).size().unstack(fill_value = 0)
-        heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        heatmap_data_normalized = heatmap_data / heatmap_data.sum(axis = 0) # normalize per month (sum = 1 per month)
+        heatmap_data_normalized = (heatmap_data_normalized * 100).round(2)
+        heatmap_long_counts = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        heatmap_long_percent = heatmap_data_normalized.reset_index().melt(id_vars = "ordered_dow", value_name = "percent")
+        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on=["ordered_dow", "ordered_month"])
+        heatmap_long["total"] = heatmap_long.groupby("ordered_month")["count"].transform("sum")
 
         fig = go.Figure(
             data = go.Heatmap(
                 x = heatmap_long["ordered_month"],
                 y = heatmap_long["ordered_dow"],
-                z = heatmap_long["count"],
+                z = heatmap_long["percent"],
                 colorscale = blue_vibrant,
-                hovertemplate = "Month: %{x}<br>Day: %{y}<br>Count: %{z}",
+                customdata = np.stack((heatmap_long["count"], heatmap_long["total"]), axis=-1),
+                hovertemplate = "Month: %{x}<br>Day: %{y}<br>Percent: %{z}% (%{customdata[0]}/%{customdata[1]})",
                 xgap = 1,   # horizontal border
                 ygap = 1,    # vertical border
                 name = ""
             )
         )
 
-        # fig.update_traces(hovertemplate = "Hour: %{x}<br>" + "Day: %{y}<br>" + "Count: %{z}")
+        threshold = heatmap_long["percent"].mean()
+        for _, row in heatmap_long.iterrows():
+            color = "white" if row["percent"] > threshold else "black"
+            fig.add_annotation(
+                x = row["ordered_month"],
+                y = row["ordered_dow"],
+                text = f"{row['percent']:.2f}%",
+                showarrow = False,
+                font = {"size" : 16, "color" : color},
+                # xref = "x",
+                # yref = "y"
+            )
+
         fig.update_layout(
-            title = "Order Heatmap by Month and Day",
+            title = f"Order Heatmap by Month and Day for {generate_location_text(area, provdist, municity)}",
             xaxis_title = "Month",
             yaxis_title = "Day of Week",
             xaxis = {
@@ -554,6 +586,65 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
             }
         )
+        st.plotly_chart(fig, use_container_width = True)
+
+    def generate_metric_trends(df):
+        if municity is not None: df = df[(df["Area"] == area) & (df["ProvDist"] == provdist) & (df["MuniCity"] == municity)]
+        elif provdist is not None: df = df[(df["Area"] == area) & (df["ProvDist"] == provdist)]
+        elif area is not None: df = df[df["Area"] == area]
+        # else: country (no filter)
+
+        level = st.selectbox("Granularity", ["Day", "Week", "Month", "Quarter"], index = 2)
+        df["year"] = df["ordered_date"].dt.year
+        df["quarter"] = df["ordered_date"].dt.quarter
+        df["month"] = df["ordered_date"].dt.month
+        df["week"] = df["ordered_date"].dt.isocalendar().week
+        df["day"] = df["ordered_date"].dt.day
+
+        if level == "Quarter": groupby_vars = ["year", "quarter"]
+        elif level == "Month": groupby_vars = ["year", "month"]
+        elif level == "Week": groupby_vars = ["year", "week"]
+        elif level == "Day": groupby_vars = ["year", "month", "day"]
+        df_plot_agg = df.groupby(groupby_vars).agg(agg_dict).reset_index()
+
+        if level == "Quarter":
+            df_plot_agg["label"] = df_plot_agg.apply(lambda row: f"{int(row["year"])}-Q{int(row["quarter"])}", axis = 1)
+            df_plot_agg.drop(columns = ["year", "quarter"], inplace = True)
+        elif level == "Month":
+            df_plot_agg["label"] = df_plot_agg.apply(lambda row: f"{int(row["year"])}-{"0" if row["month"] < 10 else ""}{int(row["month"])}", axis = 1)
+            df_plot_agg.drop(columns = ["year", "month"], inplace = True)
+        elif level == "Week":
+            df_plot_agg["label"] = df_plot_agg.apply(lambda row: (datetime.datetime.fromisocalendar(int(row["year"]), int(row["week"]), 7) - datetime.timedelta(days = 7)).strftime("%Y-%m-%d"), axis = 1)
+            df_plot_agg.drop(columns = ["year", "week"], inplace = True)
+        else:
+            df_plot_agg["label"] = pd.to_datetime(df_plot_agg[["year", "month", "day"]]).dt.strftime("%Y-%m-%d")
+            df_plot_agg.drop(columns = ["year", "month", "day"], inplace = True)
+    
+        df_plot_agg = pd.melt(df_plot_agg, id_vars = "label", 
+                              value_vars = list(df_plot_agg.columns).remove("label"), 
+                              var_name = "variable", value_name = "value")
+
+        replace_dict = dict(zip(
+            [metric["original"] for metric in metrics], 
+            [metric["short_display"] for metric in metrics]
+        ))
+        replace_dict["fast_order"] = "Fast Order Count"
+        df_plot_agg["variable"].replace(replace_dict, inplace = True)
+
+        fig = px.line(df_plot_agg, x = "label", y = "value", color = "variable",
+            title = f"{display_plot_var} by {level} for {generate_location_text(area, provdist, municity)}",
+            labels = {"date": "Date", "value": display_plot_var}, markers = True
+        )
+
+        fig.update_layout(
+            xaxis_title = "Date",
+            yaxis_title = short_display_plot_var,
+            template = "plotly_white",
+            legend_title_text = "Legend"
+        )
+        if level != "Day":
+            fig.update_xaxes(tickvals = df_plot_agg["label"], ticktext = df_plot_agg["label"])
+
         st.plotly_chart(fig, use_container_width = True)
 
     def pipeline_country(df_plot, agg_dict, agg_col, 
@@ -690,42 +781,37 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 st.subheader(map_text)
             col1, col2 = st.columns([0.3, 0.7])
             with col1: 
+                overall_metrics = df_filtered.agg(agg_dict).values
+                for i, overall_metric in enumerate(overall_metrics):
+                    if type(overall_metric) in [float, np.float32, np.float64]:
+                        overall_metric = overall_metric.round(4)
+                    st.metric(label = table_display_plot_var[i], value = overall_metric)
                 st.dataframe(display_table, hide_index = True, use_container_width = True)
-                st.write(f"Number of Multiple-Item Orders: {len(multiple)}")
-                st.write(f"Number of Rows Removed due to Multiple-Item Orders: {len(df_filtered) - len(df_filtered_no_duplicates)}")
             with col2: 
                 st.components.v1.html(map._repr_html_(), height = 600)
             generate_heatmap_hour_dow(df_filtered_no_duplicates)
 
-            # Tables
             st.header("Download Tables")
             col1, col2 = st.columns([0.7, 0.3])
             with col1:
                 columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
                 if len(columns) > 0:
-                    # st.subheader("Unique Order IDs")
-                    # st.dataframe(df_filtered_no_duplicates_display[columns], hide_index = True)
-                    # st.subheader("Duplicate Order IDs")
-                    # st.dataframe(df_filtered_duplicate_ids_display[columns], hide_index = True)
                     buffer1, buffer2, buffer3 = io.BytesIO(), io.BytesIO(), io.BytesIO()
                     df_filtered_display[columns].to_excel(buffer1, index = False)
                     df_filtered_no_duplicates_display[columns].to_excel(buffer2, index = False)
                     df_filtered_duplicate_ids_display[columns].to_excel(buffer3, index = False)
-                    buffer1.seek(0)
-                    buffer2.seek(0)
-                    buffer3.seek(0)
+                    buffer1.seek(0); buffer2.seek(0); buffer3.seek(0)
                 else: 
-                    st.write("No columns have been selected.")
+                    st.warning("No columns have been selected. Please select columns before downloading the Excel files.")
             with col2:
                 if len(columns) > 0:
                     excel_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     st.download_button(label = "Filtered Data", data = buffer1, file_name = "filtered_data.xlsx", mime = excel_mime, 
                                     help = f"Data from {start_date} to {end_date}, for categories {categories} and {generate_location_text(area, provdist, municity)}")
                     st.download_button(label = "Unique Order IDs", data = buffer2, file_name = "unique_order_ids.xlsx", mime = excel_mime,
-                                    help = "Same as 'Filtered Data', but for orders with many items, only one item is kept")
+                                    help = f"Same as 'Filtered Data', but for orders with many items, only one item is kept; {len(df_filtered) - len(df_filtered_no_duplicates)} rows removed")
                     st.download_button(label = "Duplicate Order IDs", data = buffer3, file_name = "duplicate_order_ids.xlsx", mime = excel_mime,
-                                    help = "Same as 'Filtered Data', but only orders with more than one item are included")
-                    
+                                    help = f"Same as 'Filtered Data', but only the {len(multiple)} orders with more than one item are included")
             status_placeholder.empty()
 
         elif not date_bool:
@@ -734,65 +820,13 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             st.info("Please generate the dashboard using the settings in the sidebar.")
         
     with tab2:
-        
-        if municity is not None: df_plot_all = df_plot_all[(df_plot_all["Area"] == area) & (df_plot_all["ProvDist"] == provdist) & (df_plot_all["MuniCity"] == municity)]
-        elif provdist is not None: df_plot_all = df_plot_all[(df_plot_all["Area"] == area) & (df_plot_all["ProvDist"] == provdist)]
-        elif area is not None: df_plot_all = df_plot_all[df_plot_all["Area"] == area]
-        # else: country (no filter)
-
-        level = st.selectbox("Granularity", ["Day", "Week", "Month", "Quarter"], index = 2)
-        df_plot_all["year"] = df_plot_all["ordered_date"].dt.year
-        df_plot_all["quarter"] = df_plot_all["ordered_date"].dt.quarter
-        df_plot_all["month"] = df_plot_all["ordered_date"].dt.month
-        df_plot_all["week"] = df_plot_all["ordered_date"].dt.isocalendar().week
-        df_plot_all["day"] = df_plot_all["ordered_date"].dt.day
-
-        if level == "Quarter": groupby_vars = ["year", "quarter"]
-        elif level == "Month": groupby_vars = ["year", "month"]
-        elif level == "Week": groupby_vars = ["year", "week"]
-        elif level == "Day": groupby_vars = ["year", "month", "day"]
-        df_plot_agg = df_plot_all.groupby(groupby_vars).agg(agg_dict).reset_index()
-
-        if level == "Quarter":
-            df_plot_agg["label"] = df_plot_agg.apply(lambda row: f"{int(row["year"])}-Q{int(row["quarter"])}", axis = 1)
-            df_plot_agg.drop(columns = ["year", "quarter"], inplace = True)
-        elif level == "Month":
-            df_plot_agg["label"] = df_plot_agg.apply(lambda row: f"{int(row["year"])}-{"0" if row["month"] < 10 else ""}{int(row["month"])}", axis = 1)
-            df_plot_agg.drop(columns = ["year", "month"], inplace = True)
-        elif level == "Week":
-            df_plot_agg["label"] = df_plot_agg.apply(lambda row: (datetime.datetime.fromisocalendar(int(row["year"]), int(row["week"]), 7) - datetime.timedelta(days = 7)).strftime("%Y-%m-%d"), axis = 1)
-            df_plot_agg.drop(columns = ["year", "week"], inplace = True)
-        else:
-            df_plot_agg["label"] = pd.to_datetime(df_plot_agg[["year", "month", "day"]]).dt.strftime("%Y-%m-%d")
-            df_plot_agg.drop(columns = ["year", "month", "day"], inplace = True)
-    
-        df_plot_agg = pd.melt(df_plot_agg, id_vars = "label", 
-                              value_vars = list(df_plot_agg.columns).remove("label"), 
-                              var_name = "variable", value_name = "value")
-
-        replace_dict = dict(zip(
-            [metric["original"] for metric in metrics], 
-            [metric["short_display"] for metric in metrics]
-        ))
-        replace_dict["fast_order"] = "Fast Order Count"
-        df_plot_agg["variable"].replace(replace_dict, inplace = True)
-
-        fig = px.line(df_plot_agg, x = "label", y = "value", color = "variable",
-            title = f"{display_plot_var} by {level} for {generate_location_text(area, provdist, municity)}",
-            labels = {"date": "Date", "value": display_plot_var}, markers = True
-        )
-
-        fig.update_layout(
-            xaxis_title = "Date",
-            yaxis_title = short_display_plot_var,
-            template = "plotly_white",
-            legend_title_text = "Legend"
-        )
-        if level != "Day":
-            fig.update_xaxes(tickvals = df_plot_agg["label"], ticktext = df_plot_agg["label"])
-
-        st.plotly_chart(fig, use_container_width = True)
-
-        generate_heatmap_month_dow(df_plot_all)
+        if input_checker["municity"] == 1: 
+            df_plot_trends = df_plot_trends[(df_plot_trends["MuniCity"] == municity) & (df_plot_trends["ProvDist"] == provdist) & (df_plot_trends["Area"] == area)]
+        elif input_checker["provdist"] == 1: 
+            df_plot_trends = df_plot_trends[(df_plot_trends["ProvDist"] == provdist) & (df_plot_trends["Area"] == area)]
+        elif input_checker["area"] == 1:
+            df_plot_trends = df_plot_trends[df_plot_trends["Area"] == area]
+        generate_metric_trends(df_plot_trends)
+        generate_heatmap_month_dow(df_plot_trends)
     
 user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj)
