@@ -19,7 +19,7 @@ st.set_page_config(layout = "wide")
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = not os.getenv("STREAMLIT_SERVER_ENABLED")
+LOCAL = st.secrets.get("LOCAL", True)
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
