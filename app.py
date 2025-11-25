@@ -12,12 +12,14 @@ from folium import Choropleth
 import time
 import re
 import datetime
+import os
+import io
 st.set_page_config(layout = "wide")
 
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = True
+LOCAL = not os.getenv("STREAMLIT_SERVER_ENABLED")
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
@@ -649,9 +651,11 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         counts = df_filtered["id"].value_counts()
         multiple = counts[counts >= 2].index
         df_filtered_duplicate_ids = df_filtered[df_filtered["id"].isin(multiple)]
+        df_filtered_display = df_filtered[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
         df_filtered_no_duplicates_display = df_filtered_no_duplicates[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
         df_filtered_duplicate_ids_display = df_filtered_duplicate_ids[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
-        return multiple, df_filtered_no_duplicates, df_filtered_duplicate_ids, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display
+        return multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
+            df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display
 
     # Display
     tab1, tab2 = st.tabs(["Home", "Trends"])
@@ -674,7 +678,8 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                                                                    gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
 
             # After filtering for location, remove duplicate ID rows
-            multiple, df_filtered_no_duplicates, df_filtered_duplicate_ids, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
+            multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
+                df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
             
             # Visuals
             st.header("Visuals")
@@ -693,16 +698,34 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             generate_heatmap_hour_dow(df_filtered_no_duplicates)
 
             # Tables
-            st.header("Tables")
-            columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
-            if len(columns) > 0:
-                st.subheader("Unique Order IDs")
-                st.dataframe(df_filtered_no_duplicates_display[columns], hide_index = True)
-                st.subheader("Duplicate Order IDs")
-                st.dataframe(df_filtered_duplicate_ids_display[columns], hide_index = True)
-            else:
-                st.write("No columns have been selected.")
-            
+            st.header("Download Tables")
+            col1, col2 = st.columns([0.7, 0.3])
+            with col1:
+                columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
+                if len(columns) > 0:
+                    # st.subheader("Unique Order IDs")
+                    # st.dataframe(df_filtered_no_duplicates_display[columns], hide_index = True)
+                    # st.subheader("Duplicate Order IDs")
+                    # st.dataframe(df_filtered_duplicate_ids_display[columns], hide_index = True)
+                    buffer1, buffer2, buffer3 = io.BytesIO(), io.BytesIO(), io.BytesIO()
+                    df_filtered_display[columns].to_excel(buffer1, index = False)
+                    df_filtered_no_duplicates_display[columns].to_excel(buffer2, index = False)
+                    df_filtered_duplicate_ids_display[columns].to_excel(buffer3, index = False)
+                    buffer1.seek(0)
+                    buffer2.seek(0)
+                    buffer3.seek(0)
+                else: 
+                    st.write("No columns have been selected.")
+            with col2:
+                if len(columns) > 0:
+                    excel_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    st.download_button(label = "Filtered Data", data = buffer1, file_name = "filtered_data.xlsx", mime = excel_mime, 
+                                    help = f"Data from {start_date} to {end_date}, for categories {categories} and {generate_location_text(area, provdist, municity)}")
+                    st.download_button(label = "Unique Order IDs", data = buffer2, file_name = "unique_order_ids.xlsx", mime = excel_mime,
+                                    help = "Same as 'Filtered Data', but for orders with many items, only one item is kept")
+                    st.download_button(label = "Duplicate Order IDs", data = buffer3, file_name = "duplicate_order_ids.xlsx", mime = excel_mime,
+                                    help = "Same as 'Filtered Data', but only orders with more than one item are included")
+                    
             status_placeholder.empty()
 
         elif not date_bool:
