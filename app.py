@@ -565,7 +565,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             fig.add_annotation(x = 0, y = dow, text = total, showarrow = False, font = annotation_font, xref = "x2", yref = "y2")
         fig.add_annotation(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False, font = annotation_font, xref = "x2", yref = "y")
         
-        st.plotly_chart(fig, use_container_width = True)
+        st.plotly_chart(fig, width = "stretch")
 
     def generate_heatmap_month_dow(df):
         heatmap_data = df.groupby(["ordered_dow", "ordered_month"]).size().unstack(fill_value = 0)
@@ -615,7 +615,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
             }
         )
-        st.plotly_chart(fig, use_container_width = True)
+        st.plotly_chart(fig, width = "stretch")
 
     def generate_metric_trends(df):
         if municity is not None: df = df[(df["Area"] == area) & (df["ProvDist"] == provdist) & (df["MuniCity"] == municity)]
@@ -674,7 +674,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         if level != "Day":
             fig.update_xaxes(tickvals = df_plot_agg["label"], ticktext = df_plot_agg["label"])
 
-        st.plotly_chart(fig, use_container_width = True)
+        st.plotly_chart(fig, width = "stretch")
 
     def pipeline_country(df_plot, agg_dict, agg_col, 
                          gdf1_proj, internal_plot_var, display_plot_var, ascending_bool):
@@ -815,7 +815,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                     if type(overall_metric) in [float, np.float32, np.float64]:
                         overall_metric = overall_metric.round(4)
                     st.metric(label = table_display_plot_var[i], value = overall_metric)
-                st.dataframe(display_table, hide_index = True, use_container_width = True)
+                st.dataframe(display_table, hide_index = True, width = "stretch")
             with col2: 
                 st.components.v1.html(map._repr_html_(), height = 600)
             generate_heatmap_hour_dow(df_filtered_no_duplicates)
