@@ -12,14 +12,14 @@ from folium import Choropleth
 import time
 import re
 import datetime
-import os
 import io
+from process import *
 st.set_page_config(layout = "wide")
 
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = st.secrets.get("LOCAL", False)
+LOCAL = st.secrets.get("LOCAL", True)
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
@@ -41,8 +41,9 @@ def prepare_data():
         gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
     
     gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
-    ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-    df_plot = pd.read_csv("output/df_plot.csv")
+    ph_admin_div_names, df_plot, _ = process_data()
+    # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
+    # df_plot = pd.read_csv("output/df_plot.csv")
 
     ##### 2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
@@ -496,6 +497,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         # Preprocessing
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
         heatmap_data = heatmap_data.reindex(columns = range(24), fill_value = 0)
+        heatmap_data = heatmap_data.reindex(index = range(7), fill_value = 0)
         row_totals = heatmap_data.sum(axis = 1)
         col_totals = heatmap_data.sum(axis = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
@@ -507,7 +509,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             colorscale = blue_vibrant,
             hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}", 
             xgap = 1, ygap = 1, name = "",
-            xaxis = "x", yaxis = "y2"
+            xaxis = "x", yaxis = "y2",
         ))
         fig.add_trace(go.Bar(
             x = [0] * len(row_totals), y = list(range(7)), 
