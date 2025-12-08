@@ -7,25 +7,25 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SPREADSHEET_ID = "16Sp3ZR6FpFeP-mrYeowHq5_hEjmeb7JRM61HNh3eHJI" 
-SHEET_NAME = "Tracking Details"
 WARMUP_DONE = False
 
 def get_sheets_credentials():
     try:
         creds_dict = {
-            "type": st.secrets["gcp"]["ULTRA_GOOGLE_TYPE"],
-            "project_id": st.secrets["gcp"]["ULTRA_GOOGLE_PROJECT_ID"],
-            "private_key_id": st.secrets["gcp"]["ULTRA_GOOGLE_PRIVATE_KEY_ID"],
-            "private_key": st.secrets["gcp"]["ULTRA_GOOGLE_PRIVATE_KEY"],
-            "client_email": st.secrets["gcp"]["ULTRA_GOOGLE_CLIENT_EMAIL"],
-            "client_id": st.secrets["gcp"]["ULTRA_GOOGLE_CLIENT_ID"],
-            "auth_uri": st.secrets["gcp"]["ULTRA_GOOGLE_AUTH_URI"],
-            "token_uri": st.secrets["gcp"]["ULTRA_GOOGLE_TOKEN_URI"],
-            "auth_provider_x509_cert_url": st.secrets["gcp"]["ULTRA_GOOGLE_AUTH_PROVIDER_CERT_URL"],
-            "client_x509_cert_url": st.secrets["gcp"]["ULTRA_GOOGLE_CLIENT_CERT_URL"],
-            "universe_domain": st.secrets["gcp"]["ULTRA_GOOGLE_UNIVERSE_DOMAIN"],
+            "type": st.secrets["ULTRA_GOOGLE_TYPE"],
+            "project_id": st.secrets["ULTRA_GOOGLE_PROJECT_ID"],
+            "private_key_id": st.secrets["ULTRA_GOOGLE_PRIVATE_KEY_ID"],
+            "private_key": st.secrets["ULTRA_GOOGLE_PRIVATE_KEY"],
+            "client_email": st.secrets["ULTRA_GOOGLE_CLIENT_EMAIL"],
+            "client_id": st.secrets["ULTRA_GOOGLE_CLIENT_ID"],
+            "auth_uri": st.secrets["ULTRA_GOOGLE_AUTH_URI"],
+            "token_uri": st.secrets["ULTRA_GOOGLE_TOKEN_URI"],
+            "auth_provider_x509_cert_url": st.secrets["ULTRA_GOOGLE_AUTH_PROVIDER_CERT_URL"],
+            "client_x509_cert_url": st.secrets["ULTRA_GOOGLE_CLIENT_CERT_URL"],
+            "universe_domain": st.secrets["ULTRA_GOOGLE_UNIVERSE_DOMAIN"],
         }
+        spreadsheet_id = st.secrets["SPREADSHEET_ID"]
+        sheet_name = st.secrets["Tracking Details"]
         return creds_dict
     except Exception:
         load_dotenv()
@@ -42,12 +42,15 @@ def get_sheets_credentials():
             "client_x509_cert_url": os.getenv("ULTRA_GOOGLE_CLIENT_CERT_URL"),
             "universe_domain": os.getenv("ULTRA_GOOGLE_UNIVERSE_DOMAIN"),
         }
-        return creds_dict
+        spreadsheet_id = os.getenv("SPREADSHEET_ID")
+        sheet_name = os.getenv("Tracking Details")
+        return creds_dict, spreadsheet_id, sheet_name
 
-creds = service_account.Credentials.from_service_account_info(get_sheets_credentials(), scopes = SCOPES)
+creds_dict, spreadsheet_id, sheet_name = get_sheets_credentials()
+creds = service_account.Credentials.from_service_account_info(creds_dict, scopes = SCOPES)
 sheets_service = build("sheets", "v4", credentials = creds)
 
-def read_sheets(spreadsheet_id = SPREADSHEET_ID, sheet_name = SHEET_NAME, header = True):
+def read_sheets(spreadsheet_id = spreadsheet_id, sheet_name = sheet_name, header = True):
     """Reads a Google Sheets file. 
 
     Parameters:
@@ -74,8 +77,8 @@ def read_sheets(spreadsheet_id = SPREADSHEET_ID, sheet_name = SHEET_NAME, header
 
     # Read data
     result = sheets_service.spreadsheets().values().get(
-        spreadsheetId = SPREADSHEET_ID,
-        range = SHEET_NAME + "!A:ZZZ",
+        spreadsheetId = spreadsheet_id,
+        range = sheet_name + "!A:ZZZ",
         valueRenderOption = "UNFORMATTED_VALUE",
         dateTimeRenderOption = "FORMATTED_STRING"
     ).execute()
