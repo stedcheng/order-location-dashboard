@@ -6,8 +6,7 @@ UNUSED_scratch_notebooks/
 
 # Extra datasets
 input/
-output/df_merged.csv
-output/null_ids.csv
+output/
 ph_datasets/PH_Adm*.shp
 ph_datasets/gdf*.parquet
 ph_datasets/manila.csv
