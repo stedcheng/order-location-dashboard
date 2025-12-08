@@ -25,7 +25,7 @@ def get_sheets_credentials():
             "universe_domain": st.secrets["ULTRA_GOOGLE_UNIVERSE_DOMAIN"],
         }
         spreadsheet_id = st.secrets["SPREADSHEET_ID"]
-        sheet_name = st.secrets["Tracking Details"]
+        sheet_name = st.secrets["SHEET_NAME"]
         return creds_dict
     except Exception:
         load_dotenv()
@@ -43,7 +43,7 @@ def get_sheets_credentials():
             "universe_domain": os.getenv("ULTRA_GOOGLE_UNIVERSE_DOMAIN"),
         }
         spreadsheet_id = os.getenv("SPREADSHEET_ID")
-        sheet_name = os.getenv("Tracking Details")
+        sheet_name = os.getenv("SHEET_NAME")
         return creds_dict, spreadsheet_id, sheet_name
 
 creds_dict, spreadsheet_id, sheet_name = get_sheets_credentials()
