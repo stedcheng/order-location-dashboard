@@ -33,9 +33,9 @@ def prepare_data():
     if LOCAL:
         gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
         gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
-        # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-        # df_plot = pd.read_csv("output/df_plot.csv")
-        ph_admin_div_names, df_plot, _ = process_data()
+        ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
+        df_plot = pd.read_csv("output/df_plot.csv")
+        # ph_admin_div_names, df_plot, _ = process_data()
 
     # Online
     else:
@@ -44,9 +44,6 @@ def prepare_data():
         gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
         gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
         ph_admin_div_names, df_plot, _ = process_data()
-
-    st.write(df_plot)
-    st.write(df_plot.shape)
 
     ##### 2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
