@@ -26,7 +26,7 @@ def get_sheets_credentials():
         }
         spreadsheet_id = st.secrets["SPREADSHEET_ID"]
         sheet_name = st.secrets["SHEET_NAME"]
-        return creds_dict
+        return creds_dict, spreadsheet_id, sheet_name
     except Exception:
         load_dotenv()
         creds_dict = {
