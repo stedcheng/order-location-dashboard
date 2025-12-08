@@ -498,11 +498,13 @@ def process_data():
     # Masks
     # At least one of the addresses has to completely match
     address_mask = (df_merged["address_logic_max"] == 3)
+    id_mask = (df_merged["id"].notna())
     # Ordered, processed, and one of delivered or returned, should exist
-    date_mask = (df_merged["ordered_date"].notna()) & (df_merged["processed_date"].notna()) & ((df_merged["delivered_date"].notna()) | (df_merged["returned_date"].notna()))
+    # date_mask = (df_merged["ordered_date"].notna()) & (df_merged["processed_date"].notna()) & ((df_merged["delivered_date"].notna()) | (df_merged["returned_date"].notna()))
 
     # Dataframe for future plotting
-    df_plot = df_merged[address_mask & date_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug"]]
+    # df_plot = df_merged[address_mask & date_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug"]]
+    df_plot = df_merged[address_mask & id_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug"]]
     df_plot = pd.merge(df_plot, ph_admin_div_names, on = adm_names, how = "left")
     df_plot.drop(columns = ["Area_y"], inplace = True)
     df_plot.rename(columns = {"Area_x" : "Area"}, inplace = True)
