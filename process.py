@@ -110,8 +110,8 @@ def process_data():
     ########## B1. Keeping relevant columns
 
     ph_provdists = pd.read_csv("ph_datasets/PH_Adm2_ProvDists.csv")
-    ph_municities = pd.read_csv("ph_datasets/Ph_Adm3_MuniCities.csv")
-    ph_bgysubmuns = pd.read_csv("ph_datasets/Ph_Adm4_BgySubMuns.csv")
+    ph_municities = pd.read_csv("ph_datasets/PH_Adm3_MuniCities.csv")
+    ph_bgysubmuns = pd.read_csv("ph_datasets/PH_Adm4_BgySubMuns.csv")
 
     ph_provdists = ph_provdists.astype(str)
     ph_provdists["adm2_en"] = ph_provdists["adm2_en"].str.upper().str.replace("-", " ")
