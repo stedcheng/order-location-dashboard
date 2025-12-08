@@ -9,7 +9,6 @@ input/
 output/df_merged.csv
 output/null_ids.csv
 ph_datasets/PH_Adm*.shp
-ph_datasets/PH_Adm*.csv
 ph_datasets/gdf*.parquet
 ph_datasets/manila.csv
 
