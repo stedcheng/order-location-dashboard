@@ -27,23 +27,22 @@ def prepare_data():
     ##### 1. IMPORTING
     gdf1_proj = gpd.read_file("ph_datasets/gdf1_simplified.gpkg")
     gdf2_proj = gpd.read_file("ph_datasets/gdf2_simplified.gpkg")
+    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
     
     # Local
     if LOCAL:
         gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
         gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
-    
+        ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
+        df_plot = pd.read_csv("output/df_plot.csv")
+
     # Online
     else:
         gdf3_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm3_MuniCities.shp.zip"
         gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
         gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
         gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
-    
-    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
-    ph_admin_div_names, df_plot, _ = process_data()
-    # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-    # df_plot = pd.read_csv("output/df_plot.csv")
+        ph_admin_div_names, df_plot, _ = process_data()
 
     ##### 2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
@@ -363,7 +362,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         df_plot_trends = df_plot.copy()
         df_plot = df_plot[
             (df_plot["ordered_date"] >= pd.to_datetime(start_date)) & 
-            (df_plot["ordered_date"] <= pd.to_datetime(end_date)) & 
+            (df_plot["ordered_date"] <= pd.to_datetime(end_date) + pd.Timedelta(days = 1) - pd.Timedelta(seconds = 1)) & 
             (df_plot["category_slug"].isin(categories))
         ]
 

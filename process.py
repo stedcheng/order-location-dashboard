@@ -513,9 +513,12 @@ def process_data():
 
     return ph_admin_div_names, df_plot, df_merged
 
-    # # Save processed CSVs
+    # Save processed CSVs
     # ph_admin_div_names.to_csv("output/ph_admin_div_names.csv", index = False)
     # df_plot.to_csv("output/df_plot.csv", index = False)
     # df_merged.to_csv("output/df_merged.csv", index = False)
+    # print("Data processing done!")
+
+# process_data()
 
 
