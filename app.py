@@ -33,9 +33,9 @@ def prepare_data():
     if LOCAL:
         gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
         gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
-        ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-        df_plot = pd.read_csv("output/df_plot.csv")
-        # ph_admin_div_names, df_plot, _ = process_data()
+        # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
+        # df_plot = pd.read_csv("output/df_plot.csv")
+        ph_admin_div_names, df_plot, _ = process_data()
 
     # Online
     else:
@@ -799,6 +799,8 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
                                                                    gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
 
+            st.write(df_filtered)
+            
             # After filtering for location, remove duplicate ID rows
             multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
                 df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
