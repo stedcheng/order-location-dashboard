@@ -6,6 +6,7 @@ import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import datetime
+from zoneinfo import ZoneInfo
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 WARMUP_DONE = False
@@ -91,7 +92,7 @@ def read_sheets(spreadsheet_id = spreadsheet_id, sheet_name = sheet_name, header
     else:
         df_sh = pd.DataFrame(values)
     df_sh = df_sh.fillna("").astype(str)
-    return df_sh, datetime.datetime.now()
+    return df_sh, datetime.datetime.now(ZoneInfo("Asia/Manila"))
 
 def get_supabase_credentials():
     try:
@@ -117,6 +118,6 @@ def read_supabase():
         all_rows.extend(rows)
         offset += batch_size
     df_sb = pd.DataFrame(all_rows)
-    return df_sb, datetime.datetime.now()
+    return df_sb, datetime.datetime.now(ZoneInfo("Asia/Manila"))
 
 
