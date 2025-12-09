@@ -3,11 +3,9 @@ numpy
 pandas
 geopandas
 shapely
-matplotlib
-seaborn
 plotly
 folium
-openpyxl
+XlsxWriter
 
 google-api-python-client
 google-auth

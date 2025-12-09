@@ -105,7 +105,7 @@ def process_data():
     df_merged["delivered_date"] = pd.to_datetime(df_merged["delivered_date"].fillna(df_merged["delivered_time"]))
     df_merged.drop(columns = ["delivered_time"], inplace = True)
 
-    ##### B. Loading and preprocessing Philippine PSGC dataa
+    ##### B. Loading and preprocessing Philippine PSGC data
 
     ########## B1. Keeping relevant columns
 
@@ -128,7 +128,7 @@ def process_data():
     ph_bgysubmuns = ph_bgysubmuns.astype(str)
     # ph_bgysubmuns.info()
 
-    ########## B2. Creating dictionaries for region->area and province->area
+    ########## B2. Creating dictionaries relating region and area, and province and area 
 
     # Region Number -> Area dictionary
     region_area_dict = {
@@ -161,7 +161,7 @@ def process_data():
     ph_admin_div = pd.merge(pd.merge(ph_provdists, ph_municities, how = "outer"), ph_bgysubmuns, how = "outer")
     ph_admin_div_names = ph_admin_div[["adm2_en", "adm3_en", "adm4_en", "adm2_psgc", "adm3_psgc", "adm4_psgc"]].copy()
 
-    ########## B4. Replace names of various provinces and cities
+    ########## B4. Creating dictionaries for renaming various provinces, cities, barangays, and combinations thereof
 
     provdist_to_provdist_dict = {"CITY OF ISABELA (NOT A PROVINCE)" : "BASILAN"}
 
@@ -461,7 +461,10 @@ def process_data():
     choices = [df_merged["logistics_name_sb"], "SOURCE CONFLICT", df_merged["logistics_name_sb"], df_merged["logistics_name_sh"], np.nan]
     df_merged["logistics_name"] = np.select(conditions, choices, default = np.nan)
 
-    # Metrics
+    ##### D. Preparation for plotting
+
+    ########## D1. Adding metric columns
+
     df_merged["delivered_returned_date"] = np.where(df_merged["delivered_date"].isna(), df_merged["returned_date"], df_merged["delivered_date"])
     df_merged["ordered_to_processed"] = (df_merged["processed_date"] - df_merged["ordered_date"]).dt.total_seconds() / 3600
     df_merged["processed_to_delivered_returned"] = (df_merged["delivered_returned_date"] - df_merged["processed_date"]).dt.total_seconds() / 3600
@@ -482,7 +485,8 @@ def process_data():
     # df_merged["ordered_month"] = df_merged["ordered_date"].dt.month
     df_merged["ordered_month"] = df_merged["ordered_date"].dt.strftime("%Y-%m")
 
-    # Rearrange columns for convenience
+    ########## D2. Rearranging columns for convenience
+    
     sb_cols = ["Area_sb"] + adm_names_sb + ["logistics_name_sb"]
     sh_cols = ["Area_sh"] + adm_names_sh + ["logistics_name_sh"]
     consolidated_cols = ["Area"] + adm_names + ["logistics_name"]
@@ -494,18 +498,20 @@ def process_data():
     df_merged_columns = ["id"] + sb_cols + sh_cols + consolidated_cols + address_logics + date_cols + dow_cols + metric_cols + misc_cols
     df_merged = df_merged[df_merged_columns]
 
-    ##### D. Preparation for plotting
+    ########## D3. Filtering rows
 
-    # Masks
     # At least one of the addresses has to completely match
     address_mask = (df_merged["address_logic_max"] == 3)
+    # The ID cannot be null
     id_mask = (df_merged["id"].notna())
+    # Ignore SKUs that have DEL (delivery) or TELE (teleconsult)
+    sku_mask = ~df_merged["sku"].str.contains("DEL-|TELE-", na = False)
     # Ordered, processed, and one of delivered or returned, should exist
     # date_mask = (df_merged["ordered_date"].notna()) & (df_merged["processed_date"].notna()) & ((df_merged["delivered_date"].notna()) | (df_merged["returned_date"].notna()))
 
     # Dataframe for future plotting
     # df_plot = df_merged[address_mask & date_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug"]]
-    df_plot = df_merged[address_mask & id_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug", "sku"]]
+    df_plot = df_merged[address_mask & id_mask & sku_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug", "sku"]]
     df_plot = pd.merge(df_plot, ph_admin_div_names, on = adm_names, how = "left")
     df_plot.drop(columns = ["Area_y"], inplace = True)
     df_plot.rename(columns = {"Area_x" : "Area"}, inplace = True)
