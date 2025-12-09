@@ -617,7 +617,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         # Annotation
         start = time.perf_counter()
         threshold = heatmap_long["percent"].mean()
-        colors = np.where(heatmap_long["count"] > threshold, "white", "black")
+        colors = np.where(heatmap_long["percent"] > threshold, "white", "black")
         cell_annots = [dict(
             x = x, y = y, text = f"{text:.2f}%", showarrow = False, font = {"size": 16, "color": c}
         ) for x, y, text, c in zip(
