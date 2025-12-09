@@ -471,15 +471,7 @@ def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, d
             st.session_state.generated = True
             st.session_state.last_filters = current_filters
 
-        # Date and time of last retrieval of data
-        st.markdown(
-            """
-            <div style='margin-top:-30px; margin-bottom:-30px;'>
-                <hr style='border:3px solid #444;' />
-            </div>
-            """,
-            unsafe_allow_html = True
-        )
+        st.markdown("---")
         if st.button("Refresh Data", help = "If data looks outdated, click this button."):
             st.cache_resource.clear()
             ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
