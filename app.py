@@ -765,9 +765,9 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         return map, display_table, df_filtered
 
     display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
-                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug"]
+                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug", "sku"]
     display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered Date",
-                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category"]
+                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category", "SKU"]
     def filter_duplicate_ids(df_filtered):
         df_filtered_no_duplicates = df_filtered.drop_duplicates(keep = "first", subset = ["id"])
         counts = df_filtered["id"].value_counts()

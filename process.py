@@ -82,7 +82,7 @@ def process_data():
     ########## A5. Merge sheets and Supabase tables
 
     # Merge the two tables on the ID column
-    df_merged = pd.merge(df_sb[["gr_order_id", "ordered_date", "processed_date", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "category_slug", "delivered_time"]], 
+    df_merged = pd.merge(df_sb[["gr_order_id", "ordered_date", "processed_date", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "category_slug", "sku", "delivered_time"]], 
                         df_sh[["Partner OR Code", "Delivered Date", "Returned Date", "ProvDist", "MuniCity", "BgySubmun", "logistics_name"]], 
                         left_on = "gr_order_id", right_on = "Partner OR Code", how = "outer", indicator = True,
                         suffixes = ["_sb", "_sh"])
@@ -489,7 +489,7 @@ def process_data():
     date_cols = [col for col in df_merged.columns if "date" in col]
     dow_cols = [col for col in df_merged.columns if "dow" in col or "month" in col]
     metric_cols = ["ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "fast_order", "ordered_hour"]
-    misc_cols = ["category_slug", "source"]
+    misc_cols = ["category_slug", "sku", "source"]
     df_merged_columns = ["id"] + sb_cols + sh_cols + consolidated_cols + address_logics + date_cols + dow_cols + metric_cols + misc_cols
     df_merged = df_merged[df_merged_columns]
 
@@ -504,7 +504,7 @@ def process_data():
 
     # Dataframe for future plotting
     # df_plot = df_merged[address_mask & date_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug"]]
-    df_plot = df_merged[address_mask & id_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug"]]
+    df_plot = df_merged[address_mask & id_mask][["id"] + consolidated_cols + date_cols + dow_cols + metric_cols + ["category_slug", "sku"]]
     df_plot = pd.merge(df_plot, ph_admin_div_names, on = adm_names, how = "left")
     df_plot.drop(columns = ["Area_y"], inplace = True)
     df_plot.rename(columns = {"Area_x" : "Area"}, inplace = True)
@@ -514,13 +514,5 @@ def process_data():
     df_plot.loc[df_plot["MuniCity"] == "MANILA", "MuniCityPSGC"] = "1380600000"
 
     return ph_admin_div_names, df_plot, df_merged
-
-    # Save processed CSVs
-    # ph_admin_div_names.to_csv("output/ph_admin_div_names.csv", index = False)
-    # df_plot.to_csv("output/df_plot.csv", index = False)
-    # df_merged.to_csv("output/df_merged.csv", index = False)
-    # print("Data processing done!")
-
-# process_data()
 
 

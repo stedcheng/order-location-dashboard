@@ -11,6 +11,10 @@ ph_datasets/PH_Adm*.shp
 ph_datasets/gdf*.parquet
 ph_datasets/manila.csv
 
+# Python test files
+local.py
+test.py
+
 # Cache
 __pycache__/
 
