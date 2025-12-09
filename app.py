@@ -575,8 +575,14 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         heatmap_data_normalized = (heatmap_data_normalized * 100).round(2)
         heatmap_long_counts = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
         heatmap_long_percent = heatmap_data_normalized.reset_index().melt(id_vars = "ordered_dow", value_name = "percent")
-        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on=["ordered_dow", "ordered_month"])
+        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on = ["ordered_dow", "ordered_month"])
         heatmap_long["total"] = heatmap_long.groupby("ordered_month")["count"].transform("sum")
+
+        start = datetime.date(2025, 7, 1)
+        today = datetime.date.today()
+        n_months = (today.year - start.year) * 12 + (today.month - start.month) + 1
+        months = [pd.Period("2025-07", freq = "M") + i for i in range(n_months)]
+        months_formatted = [m.strftime("%Y-%m") for m in months]
 
         fig = go.Figure(
             data = go.Heatmap(
@@ -610,7 +616,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             xaxis_title = "Month",
             yaxis_title = "Day of Week",
             xaxis = {
-                "tickmode" : "array", "tickvals" : list(range(7, 12, 1)), "ticktext" : list(range(7, 12, 1))
+                "tickmode" : "array", "tickvals" : months_formatted, "ticktext" : months_formatted
             },
             yaxis = {
                 "tickmode" : "array", "tickvals" : list(range(7)), 

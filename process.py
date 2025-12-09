@@ -479,7 +479,8 @@ def process_data():
     df_merged["ordered_dow"] = df_merged["ordered_date"].dt.dayofweek
     df_merged["processed_dow"] = df_merged["processed_date"].dt.dayofweek
     df_merged["delivered_returned_dow"] = df_merged["delivered_returned_date"].dt.dayofweek
-    df_merged["ordered_month"] = df_merged["ordered_date"].dt.month
+    # df_merged["ordered_month"] = df_merged["ordered_date"].dt.month
+    df_merged["ordered_month"] = df_merged["ordered_date"].dt.strftime("%Y-%m")
 
     # Rearrange columns for convenience
     sb_cols = ["Area_sb"] + adm_names_sb + ["logistics_name_sb"]
