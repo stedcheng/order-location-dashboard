@@ -5,6 +5,7 @@ import streamlit as st
 import os
 from supabase import create_client, Client
 from dotenv import load_dotenv
+import datetime
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 WARMUP_DONE = False
@@ -86,11 +87,11 @@ def read_sheets(spreadsheet_id = spreadsheet_id, sheet_name = sheet_name, header
     values = result.get("values", [])
     # Put appropriate header if there is
     if header:
-        df = pd.DataFrame(values[1:], columns = values[0])
+        df_sh = pd.DataFrame(values[1:], columns = values[0])
     else:
-        df = pd.DataFrame(values)
-    df = df.fillna("").astype(str)
-    return df
+        df_sh = pd.DataFrame(values)
+    df_sh = df_sh.fillna("").astype(str)
+    return df_sh, datetime.datetime.now()
 
 def get_supabase_credentials():
     try:
@@ -116,5 +117,6 @@ def read_supabase():
         all_rows.extend(rows)
         offset += batch_size
     df_sb = pd.DataFrame(all_rows)
-    return df_sb
+    return df_sb, datetime.datetime.now()
+
 

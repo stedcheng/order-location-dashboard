@@ -36,7 +36,7 @@ def prepare_data():
         gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
         # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
         # df_plot = pd.read_csv("output/df_plot.csv")
-        ph_admin_div_names, df_plot, _ = process_data()
+        ph_admin_div_names, df_plot, _, datetime_sh, datetime_sb = process_data()
 
     # Online
     else:
@@ -44,7 +44,7 @@ def prepare_data():
         gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
         gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
         gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
-        ph_admin_div_names, df_plot, _ = process_data()
+        ph_admin_div_names, df_plot, _, datetime_sh, datetime_sb  = process_data()
 
     ##### 2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
@@ -202,10 +202,10 @@ def prepare_data():
     # Replace all Roman suffixes (BARANGAY IV or BARANGAY IV-A) with Hindu-Arabic numerals (BARANGAY 4 or BARANGAY 4-A)
     gdf4_proj["adm4_en"] = gdf4_proj["adm4_en"].apply(convert_roman_suffix)    
 
-    return ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot
+    return ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb
 
 start = time.perf_counter()
-ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot = prepare_data()
+ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
 end = time.perf_counter()
 print(f"Elapsed time for Data Preparation: {end - start:.4f} seconds")
 
@@ -348,7 +348,7 @@ def make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_
     return map
 
 ##### C. USER INPUT
-def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
+def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb):
     st.title("Location Data")
     with st.sidebar:
 
@@ -470,6 +470,24 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         if st.button("Generate"):
             st.session_state.generated = True
             st.session_state.last_filters = current_filters
+
+        # Date and time of last retrieval of data
+        st.markdown(
+            """
+            <div style='margin-top:-30px; margin-bottom:-30px;'>
+                <hr style='border:3px solid #444;' />
+            </div>
+            """,
+            unsafe_allow_html = True
+        )
+        if st.button("Refresh Data", help = "If data looks outdated, click this button."):
+            st.cache_resource.clear()
+            ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
+        st.caption(
+            "Date and time of last data retrieval:   \n"
+            f"Sheets: {datetime_sh.strftime("%Y-%m-%d %H:%M:%S")}   \n"
+            f"Supabase: {datetime_sb.strftime("%Y-%m-%d %H:%M:%S")}"
+        )
    
     # Functions
     def generate_location_text(area, provdist, municity):
@@ -889,4 +907,4 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         generate_metric_trends(df_plot_trends)
         generate_heatmap_month_dow(df_plot_trends)
     
-user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj)
+user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb)

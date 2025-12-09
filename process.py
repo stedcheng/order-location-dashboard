@@ -7,8 +7,8 @@ def process_data():
 
     ##### A. Loading and preprocessing the Sheets and Supabase data
 
-    df_sh = read_sheets()
-    df_sb = read_supabase()
+    df_sh, datetime_sh = read_sheets()
+    df_sb, datetime_sb = read_supabase()
 
     ########## A1. Initial preprocessing
 
@@ -514,6 +514,6 @@ def process_data():
     df_plot.loc[df_plot["ProvDist"] == "METRO MANILA", "ProvDistPSGC"] = "1300000000" 
     df_plot.loc[df_plot["MuniCity"] == "MANILA", "MuniCityPSGC"] = "1380600000"
 
-    return ph_admin_div_names, df_plot, df_merged
+    return ph_admin_div_names, df_plot, df_merged, datetime_sh, datetime_sb
 
 
