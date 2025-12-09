@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import folium
 from folium import Choropleth
+from folium.plugins import Fullscreen
 import time
 import re
 import datetime
@@ -224,6 +225,7 @@ def make_map(gdf_geo, internal_area_name, display_area_name, internal_plot_var, 
         fill_color = fill_color,
         legend_name = display_plot_var
     ).add_to(map)
+    Fullscreen().add_to(map)
     end = time.perf_counter()
     print(f"Elapsed time for Map: {end - start:.4f} seconds")
 
@@ -827,12 +829,13 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             
             # Visuals
             st.header("Visuals")
-            col1, col2 = st.columns([0.3, 0.7])
+            col1, col2, col3 = st.columns([0.3, 0.2, 0.5])
             with col1: st.subheader("Metrics Table")
-            with col2: 
+            with col2: st.subheader("Logistics Count")
+            with col3: 
                 map_text = generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date)
                 st.subheader(map_text)
-            col1, col2 = st.columns([0.3, 0.7])
+            col1, col2, col3 = st.columns([0.3, 0.2, 0.5])
             with col1: 
                 overall_metrics = df_filtered.agg(agg_dict).values
                 for i, overall_metric in enumerate(overall_metrics):
@@ -840,7 +843,11 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                         overall_metric = overall_metric.round(4)
                     st.metric(label = table_display_plot_var[i], value = overall_metric)
                 st.dataframe(display_table, hide_index = True, width = "stretch")
-            with col2: 
+            with col2:
+                logistics_counts = pd.DataFrame(df_plot["logistics_name"].value_counts().reset_index())
+                logistics_counts.columns = ["Logistics Name", "Count"]
+                st.dataframe(logistics_counts, hide_index = True, width = "stretch")
+            with col3: 
                 st.components.v1.html(map._repr_html_(), height = 600)
             generate_heatmap_hour_dow(df_filtered_no_duplicates)
 
