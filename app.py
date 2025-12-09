@@ -798,8 +798,6 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             else: 
                 map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
                                                                    gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
-
-            st.write(df_filtered)
             
             # After filtering for location, remove duplicate ID rows
             multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
