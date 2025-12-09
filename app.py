@@ -495,14 +495,18 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
 
     def generate_heatmap_hour_dow(df):
         # Preprocessing
+        start = time.perf_counter()
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
         heatmap_data = heatmap_data.reindex(columns = range(24), fill_value = 0)
         heatmap_data = heatmap_data.reindex(index = range(7), fill_value = 0)
         row_totals = heatmap_data.sum(axis = 1)
         col_totals = heatmap_data.sum(axis = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        end = time.perf_counter()
+        print(f"Elapsed time for Data Preprocessing: {end - start:.4f} seconds")
 
         # Heatmap and "subplots"
+        start = time.perf_counter()
         fig = go.Figure()
         fig.add_trace(go.Heatmap(
             x = list(range(24)), y = list(range(7)), z = heatmap_data.values, 
@@ -552,21 +556,33 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 x = 0, y = 0.97, xanchor = "left", yanchor = "top"
             )
         )
+        end = time.perf_counter()
+        print(f"Elapsed time for Figure Making: {end - start:.4f} seconds")
         
         # Annotations
+        start = time.perf_counter()
         threshold = heatmap_long["count"].median()
-        for _, row in heatmap_long.iterrows():
-            color = "white" if row["count"] > threshold else "black"
-            fig.add_annotation(x = row["ordered_hour"], y = row["ordered_dow"], text = row["count"],
-                               showarrow = False, font = {"size" : 16, "color" : color},
-                               xref = "x", yref = "y2")
-        annotation_font = {"size" : 16, "color" : "black"}
-        for hour, total in col_totals.items(): # col totals
-            fig.add_annotation(x = hour, y = 0, text = total, showarrow = False, font = annotation_font, xref = "x", yref = "y")
-        for dow, total in row_totals.items(): # row totals
-            fig.add_annotation(x = 0, y = dow, text = total, showarrow = False, font = annotation_font, xref = "x2", yref = "y2")
-        fig.add_annotation(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False, font = annotation_font, xref = "x2", yref = "y")
-        
+        colors = np.where(heatmap_long["count"] > threshold, "white", "black")
+        cell_annots = [dict(
+            x = x, y = y, text = text, showarrow = False,
+            font = {"size": 16, "color": c}, xref = "x", yref = "y2"
+        ) for x, y, text, c in zip(
+            heatmap_long["ordered_hour"], heatmap_long["ordered_dow"], heatmap_long["count"], colors
+        )]
+        col_annots = [dict(
+            x = hour, y = 0, text = total, showarrow = False,
+            font = {"size": 16, "color": "black"}, xref = "x", yref = "y"
+        ) for hour, total in col_totals.items()]
+        row_annots = [dict(
+            x = 0, y = dow, text = total, showarrow = False,
+            font = {"size": 16, "color": "black"}, xref = "x2", yref = "y2"
+        ) for dow, total in row_totals.items()]
+        grand_annot = [dict(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False,
+                            font = {"size": 16, "color": "black"}, xref = "x2", yref = "y")]
+        fig.update_layout(annotations = cell_annots + col_annots + row_annots + grand_annot)
+        end = time.perf_counter()
+        print(f"Elapsed time for Annotations: {end - start:.4f} seconds")
+
         st.plotly_chart(fig, width = "stretch")
 
     def generate_heatmap_month_dow(df):
@@ -598,18 +614,18 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             )
         )
 
+        # Annotation
+        start = time.perf_counter()
         threshold = heatmap_long["percent"].mean()
-        for _, row in heatmap_long.iterrows():
-            color = "white" if row["percent"] > threshold else "black"
-            fig.add_annotation(
-                x = row["ordered_month"],
-                y = row["ordered_dow"],
-                text = f"{row['percent']:.2f}%",
-                showarrow = False,
-                font = {"size" : 16, "color" : color},
-                # xref = "x",
-                # yref = "y"
-            )
+        colors = np.where(heatmap_long["count"] > threshold, "white", "black")
+        cell_annots = [dict(
+            x = x, y = y, text = f"{text:.2f}%", showarrow = False, font = {"size": 16, "color": c}
+        ) for x, y, text, c in zip(
+            heatmap_long["ordered_month"], heatmap_long["ordered_dow"], heatmap_long["percent"], colors
+        )]
+        fig.update_layout(annotations = cell_annots)
+        end = time.perf_counter()
+        print(f"Elapsed time for Annotations: {end - start:.4f} seconds")
 
         fig.update_layout(
             title = f"Order Heatmap by Month and Day for {generate_location_text(area, provdist, municity)}",
