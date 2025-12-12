@@ -3,48 +3,49 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 import folium
 from folium import Choropleth
+from folium.plugins import Fullscreen
 import time
 import re
 import datetime
-import os
 import io
+from process import *
 st.set_page_config(layout = "wide")
+from plotly.subplots import make_subplots
 
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = st.secrets.get("LOCAL", False)
+LOCAL = st.secrets.get("LOCAL", True)
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
 def prepare_data():
-    ##### 1. IMPORTING
+    ##### A1. IMPORTING
     gdf1_proj = gpd.read_file("ph_datasets/gdf1_simplified.gpkg")
     gdf2_proj = gpd.read_file("ph_datasets/gdf2_simplified.gpkg")
+    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
     
     # Local
     if LOCAL:
         gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
         gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
-    
+        # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
+        # df_plot = pd.read_csv("output/df_plot.csv")
+        ph_admin_div_names, df_plot, _, datetime_sh, datetime_sb = process_data()
+
     # Online
     else:
         gdf3_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm3_MuniCities.shp.zip"
         gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
         gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
         gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
-    
-    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
-    ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-    df_plot = pd.read_csv("output/df_plot.csv")
+        ph_admin_div_names, df_plot, _, datetime_sh, datetime_sb  = process_data()
 
-    ##### 2. DATATYPES AND FORMATTING
+    ##### A2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
     for col in df_plot.columns[df_plot.columns.str.contains("PSGC")]:
         df_plot[col] = df_plot[col].astype(str)
@@ -63,7 +64,7 @@ def prepare_data():
         for english_col in gdf_proj.columns[gdf_proj.columns.str.contains("_en")]:
             gdf_proj[english_col] = gdf_proj[english_col].str.upper()
 
-    ##### 3. AREA DICTIONARIES
+    ##### A3. AREA DICTIONARIES
     # Region Number -> Area dictionary
     region_area_dict = {
         "NORTH LUZON" : [1, 2, 3, 14], 
@@ -89,7 +90,7 @@ def prepare_data():
     province_area_dict["SAMAR"] = "VISAYAS"
     province_area_dict["COTABATO"] = "MINDANAO"
     
-    ##### 4. PROCESSING
+    ##### A4. PROCESSING
     provdist_to_provdist_dict = {"CITY OF ISABELA (NOT A PROVINCE)" : "BASILAN"}
     municity_to_provdist = pd.read_csv("ph_datasets/municity_to_provdist.csv")
     new_municity_to_provdist_dict = dict(zip(municity_to_provdist["new_municity"], municity_to_provdist["provdist"]))
@@ -200,10 +201,10 @@ def prepare_data():
     # Replace all Roman suffixes (BARANGAY IV or BARANGAY IV-A) with Hindu-Arabic numerals (BARANGAY 4 or BARANGAY 4-A)
     gdf4_proj["adm4_en"] = gdf4_proj["adm4_en"].apply(convert_roman_suffix)    
 
-    return ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot
+    return ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb
 
 start = time.perf_counter()
-ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot = prepare_data()
+ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
 end = time.perf_counter()
 print(f"Elapsed time for Data Preparation: {end - start:.4f} seconds")
 
@@ -223,6 +224,7 @@ def make_map(gdf_geo, internal_area_name, display_area_name, internal_plot_var, 
         fill_color = fill_color,
         legend_name = display_plot_var
     ).add_to(map)
+    Fullscreen().add_to(map)
     end = time.perf_counter()
     print(f"Elapsed time for Map: {end - start:.4f} seconds")
 
@@ -345,28 +347,29 @@ def make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_
     return map
 
 ##### C. USER INPUT
-def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
+def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb):
     st.title("Location Data")
+    ##### C1. SIDEBAR
     with st.sidebar:
 
-        ##### 1. DATE & CATEGORY
+        ##### C1a. DATE & CATEGORY
         date_bool = True
         start_date = st.date_input("Start Date", value = (datetime.date.today() - pd.DateOffset(months = 1)).date(),
                                    min_value = pd.to_datetime("2025-07-01"))
         end_date = st.date_input("End Date", value = datetime.date.today(), max_value = datetime.date.today())
         if start_date > end_date:
             date_bool = False
-        category_options = ["ED", "HL", "PE", "WL", "uncategorized"]
+        category_options = ["ED", "HL", "PE", "WL"]
         categories = st.multiselect("Category", category_options, default = category_options)
 
         df_plot_trends = df_plot.copy()
         df_plot = df_plot[
             (df_plot["ordered_date"] >= pd.to_datetime(start_date)) & 
-            (df_plot["ordered_date"] <= pd.to_datetime(end_date)) & 
+            (df_plot["ordered_date"] <= pd.to_datetime(end_date) + pd.Timedelta(days = 1) - pd.Timedelta(seconds = 1)) & 
             (df_plot["category_slug"].isin(categories))
         ]
 
-        ##### 2. PLOT VARIABLE
+        ##### C1b. PLOT VARIABLE
         metrics = [
             {
                 "original": "id",
@@ -426,7 +429,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             agg_col.extend(metric.get("extra_cols", []))
             table_display_plot_var.extend(metric.get("extra_cols_short_display", []))
 
-        ##### 3. LOCATION
+        ##### C1c. LOCATION
         input_checker = {"area" : 0, "provdist" : 0, "municity" : 0}
 
         area_list = ph_admin_div_names["Area"].unique()
@@ -450,7 +453,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 if municity is not None:
                     input_checker["municity"] = 1
 
-        # Session states
+        ##### C1d. SESSION STATES
         if "generated" not in st.session_state: st.session_state.generated = False
         if "last_filters" not in st.session_state: st.session_state.last_filters = {}
         current_filters = {
@@ -467,8 +470,18 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         if st.button("Generate"):
             st.session_state.generated = True
             st.session_state.last_filters = current_filters
-   
-    # Functions
+
+        st.markdown("---")
+        if st.button("Refresh Data", help = "If data looks outdated, click this button."):
+            st.cache_resource.clear()
+            ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
+        st.caption(
+            "Date and time of last data retrieval:   \n"
+            f"Sheets: {datetime_sh.strftime("%Y-%m-%d %H:%M:%S")}   \n"
+            f"Supabase: {datetime_sb.strftime("%Y-%m-%d %H:%M:%S")}"
+        )
+
+    ##### C2. HELPER FUNCTIONS AND VARIABLES
     def generate_location_text(area, provdist, municity):
         if input_checker["municity"] == 1: 
             location_text = f"{municity}, {provdist}"
@@ -484,6 +497,12 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         location_text = generate_location_text(area, provdist, municity)
         map_text = f"Map of {display_plot_var} for {location_text} ({start_date} – {end_date})" # insert categories
         return map_text
+    
+    def to_excel_buffer(df, columns):
+        buf = io.BytesIO()
+        df[columns].to_excel(buf, index = False, engine = "xlsxwriter")
+        buf.seek(0)
+        return buf
 
     blue_vibrant = [
         [0.0, "rgb(230, 245, 255)"],
@@ -492,22 +511,33 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         [1.0, "rgb(0, 0, 90)"]
     ]
 
+    display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
+                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug", "sku"]
+    display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered Date",
+                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category", "SKU"]
+
+    ##### C3. PLOTTING FUNCTIONS
     def generate_heatmap_hour_dow(df):
         # Preprocessing
+        start = time.perf_counter()
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
         heatmap_data = heatmap_data.reindex(columns = range(24), fill_value = 0)
+        heatmap_data = heatmap_data.reindex(index = range(7), fill_value = 0)
         row_totals = heatmap_data.sum(axis = 1)
         col_totals = heatmap_data.sum(axis = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        end = time.perf_counter()
+        print(f"Elapsed time for Data Preprocessing: {end - start:.4f} seconds")
 
         # Heatmap and "subplots"
+        start = time.perf_counter()
         fig = go.Figure()
         fig.add_trace(go.Heatmap(
             x = list(range(24)), y = list(range(7)), z = heatmap_data.values, 
             colorscale = blue_vibrant,
             hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}", 
             xgap = 1, ygap = 1, name = "",
-            xaxis = "x", yaxis = "y2"
+            xaxis = "x", yaxis = "y2",
         ))
         fig.add_trace(go.Bar(
             x = [0] * len(row_totals), y = list(range(7)), 
@@ -550,21 +580,33 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 x = 0, y = 0.97, xanchor = "left", yanchor = "top"
             )
         )
+        end = time.perf_counter()
+        print(f"Elapsed time for Heatmap Hour/DOW - Figure Making: {end - start:.4f} seconds")
         
         # Annotations
+        start = time.perf_counter()
         threshold = heatmap_long["count"].median()
-        for _, row in heatmap_long.iterrows():
-            color = "white" if row["count"] > threshold else "black"
-            fig.add_annotation(x = row["ordered_hour"], y = row["ordered_dow"], text = row["count"],
-                               showarrow = False, font = {"size" : 16, "color" : color},
-                               xref = "x", yref = "y2")
-        annotation_font = {"size" : 16, "color" : "black"}
-        for hour, total in col_totals.items(): # col totals
-            fig.add_annotation(x = hour, y = 0, text = total, showarrow = False, font = annotation_font, xref = "x", yref = "y")
-        for dow, total in row_totals.items(): # row totals
-            fig.add_annotation(x = 0, y = dow, text = total, showarrow = False, font = annotation_font, xref = "x2", yref = "y2")
-        fig.add_annotation(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False, font = annotation_font, xref = "x2", yref = "y")
-        
+        colors = np.where(heatmap_long["count"] > threshold, "white", "black")
+        cell_annots = [dict(
+            x = x, y = y, text = text, showarrow = False,
+            font = {"size": 16, "color": c}, xref = "x", yref = "y2"
+        ) for x, y, text, c in zip(
+            heatmap_long["ordered_hour"], heatmap_long["ordered_dow"], heatmap_long["count"], colors
+        )]
+        col_annots = [dict(
+            x = hour, y = 0, text = total, showarrow = False,
+            font = {"size": 16, "color": "black"}, xref = "x", yref = "y"
+        ) for hour, total in col_totals.items()]
+        row_annots = [dict(
+            x = 0, y = dow, text = total, showarrow = False,
+            font = {"size": 16, "color": "black"}, xref = "x2", yref = "y2"
+        ) for dow, total in row_totals.items()]
+        grand_annot = [dict(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False,
+                            font = {"size": 16, "color": "black"}, xref = "x2", yref = "y")]
+        fig.update_layout(annotations = cell_annots + col_annots + row_annots + grand_annot)
+        end = time.perf_counter()
+        print(f"Elapsed time for Heatmap Hour/DOW - Annotations: {end - start:.4f} seconds")
+
         st.plotly_chart(fig, width = "stretch")
 
     def generate_heatmap_month_dow(df):
@@ -573,8 +615,14 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         heatmap_data_normalized = (heatmap_data_normalized * 100).round(2)
         heatmap_long_counts = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
         heatmap_long_percent = heatmap_data_normalized.reset_index().melt(id_vars = "ordered_dow", value_name = "percent")
-        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on=["ordered_dow", "ordered_month"])
+        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on = ["ordered_dow", "ordered_month"])
         heatmap_long["total"] = heatmap_long.groupby("ordered_month")["count"].transform("sum")
+
+        start = datetime.date(2025, 7, 1)
+        today = datetime.date.today()
+        n_months = (today.year - start.year) * 12 + (today.month - start.month) + 1
+        months = [pd.Period("2025-07", freq = "M") + i for i in range(n_months)]
+        months_formatted = [m.strftime("%Y-%m") for m in months]
 
         fig = go.Figure(
             data = go.Heatmap(
@@ -590,25 +638,25 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             )
         )
 
+        # Annotation
+        start = time.perf_counter()
         threshold = heatmap_long["percent"].mean()
-        for _, row in heatmap_long.iterrows():
-            color = "white" if row["percent"] > threshold else "black"
-            fig.add_annotation(
-                x = row["ordered_month"],
-                y = row["ordered_dow"],
-                text = f"{row['percent']:.2f}%",
-                showarrow = False,
-                font = {"size" : 16, "color" : color},
-                # xref = "x",
-                # yref = "y"
-            )
+        colors = np.where(heatmap_long["percent"] > threshold, "white", "black")
+        cell_annots = [dict(
+            x = x, y = y, text = f"{text:.2f}%", showarrow = False, font = {"size": 16, "color": c}
+        ) for x, y, text, c in zip(
+            heatmap_long["ordered_month"], heatmap_long["ordered_dow"], heatmap_long["percent"], colors
+        )]
+        fig.update_layout(annotations = cell_annots)
+        end = time.perf_counter()
+        print(f"Elapsed time for Heatmap Month/DOW - Annotations: {end - start:.4f} seconds")
 
         fig.update_layout(
             title = f"Order Heatmap by Month and Day for {generate_location_text(area, provdist, municity)}",
             xaxis_title = "Month",
             yaxis_title = "Day of Week",
             xaxis = {
-                "tickmode" : "array", "tickvals" : list(range(7, 12, 1)), "ticktext" : list(range(7, 12, 1))
+                "tickmode" : "array", "tickvals" : months_formatted, "ticktext" : months_formatted
             },
             yaxis = {
                 "tickmode" : "array", "tickvals" : list(range(7)), 
@@ -674,6 +722,43 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         if level != "Day":
             fig.update_xaxes(tickvals = df_plot_agg["label"], ticktext = df_plot_agg["label"])
 
+        st.plotly_chart(fig, width = "stretch")
+
+    def display_overall_metrics_display_table(df, agg_dict, table_display_plot_var):
+        overall_metrics = df.agg(agg_dict).values
+        for i, overall_metric in enumerate(overall_metrics):
+            if type(overall_metric) in [float, np.float32, np.float64]:
+                overall_metric = overall_metric.round(4)
+            st.metric(label = table_display_plot_var[i], value = overall_metric)
+        st.dataframe(display_table, hide_index = True, width = "stretch")
+
+    def display_logistics_data(df):
+        logistics_df = df.groupby("logistics_name").agg(
+            col1 = ("id", "size"),
+            col2 = ("processed_to_delivered_returned", "count"),
+            col3 = ("processed_to_delivered_returned", "mean"),
+        ).reset_index()
+        logistics_df.columns = ["Logistics Name", "Count", "Count (With Delivery Time)", "Processed to Delivered (Avg Hrs)"]
+        logistics_df = logistics_df.sort_values(by = "Count", ascending = False)
+        st.dataframe(logistics_df, hide_index = True, width = "stretch")
+
+        logistics_names = logistics_df[logistics_df["Count (With Delivery Time)"] > 0]["Logistics Name"].tolist()
+        color_map = {
+            "J&T Express": "#FD0001",
+            "SPX": "#EE502F",
+            "GoRocky Rider": "#FAD3AB"
+        }
+        fig = make_subplots(rows = 1, cols = len(logistics_names), subplot_titles = logistics_names)
+        for i, ln in enumerate(logistics_names, start = 1):
+            data = df[df["logistics_name"] == ln]["processed_to_delivered_returned"]
+            fig.add_trace(go.Histogram(x = data, xbins = dict(size = 24), name = ln, marker = dict(color = color_map.get(ln))), 
+                          row = 1, col = i)
+        fig.update_layout(
+            title_text = "Histograms of Processed-to-Delivered Durations of Logistics Partners",
+            bargap = 0.1,
+            template = "plotly_white",
+            xaxis_title = "Hours", xaxis2_title = "Hours", xaxis3_title = "Hours", yaxis_title = "Count"
+        )
         st.plotly_chart(fig, width = "stretch")
 
     def pipeline_country(df_plot, agg_dict, agg_col, 
@@ -761,12 +846,29 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         df_filtered = df_plot[(df_plot["MuniCity"] == municity) & (df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
 
         return map, display_table, df_filtered
+    
+    def pipeline_location(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, 
+                          provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker):
+        if input_checker["municity"] == 1: 
+            map, display_table, df_filtered = pipeline_city(df_plot, agg_dict, agg_col,
+                                                            provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
+        elif input_checker["provdist"] == 1: 
+            map, display_table, df_filtered = pipeline_province(df_plot, agg_dict, agg_col, 
+                                                                provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
+        elif input_checker["area"] == 1:
+            map, display_table, df_filtered = pipeline_area(df_plot, agg_dict, agg_col,
+                                                            area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
+        else: 
+            map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
+                                                               gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
+        return map, display_table, df_filtered
+    
+    @st.cache_data
+    def render_map_html(map_html):
+        return map_html
 
-    display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
-                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug"]
-    display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered Date",
-                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category"]
     def filter_duplicate_ids(df_filtered):
+        start = time.perf_counter()
         df_filtered_no_duplicates = df_filtered.drop_duplicates(keep = "first", subset = ["id"])
         counts = df_filtered["id"].value_counts()
         multiple = counts[counts >= 2].index
@@ -774,6 +876,8 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         df_filtered_display = df_filtered[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
         df_filtered_no_duplicates_display = df_filtered_no_duplicates[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
         df_filtered_duplicate_ids_display = df_filtered_duplicate_ids[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
+        end = time.perf_counter()
+        print(f"Elapsed time for Filtering Duplicate IDs: {end - start:.4f} seconds")
         return multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
             df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display
 
@@ -784,19 +888,9 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         status_placeholder = st.empty()
         if date_bool and st.session_state.generated:
             status_placeholder.write("Generating...")
-            if input_checker["municity"] == 1: 
-                map, display_table, df_filtered = pipeline_city(df_plot, agg_dict, agg_col,
-                                                                provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
-            elif input_checker["provdist"] == 1: 
-                map, display_table, df_filtered = pipeline_province(df_plot, agg_dict, agg_col, 
-                                                                    provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
-            elif input_checker["area"] == 1:
-                map, display_table, df_filtered = pipeline_area(df_plot, agg_dict, agg_col,
-                                                                area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
-            else: 
-                map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
-                                                                   gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
-
+            map, display_table, df_filtered = pipeline_location(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj,
+                                                                     provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker)
+            map_html = render_map_html(map._repr_html_())
             # After filtering for location, remove duplicate ID rows
             multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
                 df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
@@ -805,43 +899,39 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             st.header("Visuals")
             col1, col2 = st.columns([0.3, 0.7])
             with col1: st.subheader("Metrics Table")
-            with col2: 
-                map_text = generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date)
-                st.subheader(map_text)
-            col1, col2 = st.columns([0.3, 0.7])
-            with col1: 
-                overall_metrics = df_filtered.agg(agg_dict).values
-                for i, overall_metric in enumerate(overall_metrics):
-                    if type(overall_metric) in [float, np.float32, np.float64]:
-                        overall_metric = overall_metric.round(4)
-                    st.metric(label = table_display_plot_var[i], value = overall_metric)
-                st.dataframe(display_table, hide_index = True, width = "stretch")
-            with col2: 
-                st.components.v1.html(map._repr_html_(), height = 600)
-            generate_heatmap_hour_dow(df_filtered_no_duplicates)
+            with col2: st.subheader(generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date))
 
+            col1, col2 = st.columns([0.3, 0.7])
+            with col1: display_overall_metrics_display_table(df_filtered, agg_dict, table_display_plot_var)
+            with col2: st.components.v1.html(map_html, height = 600)
+
+            st.subheader("Logistics Count")
+            display_logistics_data(df_filtered)
+
+            generate_heatmap_hour_dow(df_filtered)
+
+            start = time.perf_counter()
             st.header("Download Tables")
             col1, col2 = st.columns([0.7, 0.3])
-            with col1:
-                columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
-                if len(columns) > 0:
-                    buffer1, buffer2, buffer3 = io.BytesIO(), io.BytesIO(), io.BytesIO()
-                    df_filtered_display[columns].to_excel(buffer1, index = False)
-                    df_filtered_no_duplicates_display[columns].to_excel(buffer2, index = False)
-                    df_filtered_duplicate_ids_display[columns].to_excel(buffer3, index = False)
-                    buffer1.seek(0); buffer2.seek(0); buffer3.seek(0)
-                else: 
-                    st.warning("No columns have been selected. Please select columns before downloading the Excel files.")
+            with col1: columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
+
             with col2:
                 if len(columns) > 0:
                     excel_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    st.download_button(label = "Filtered Data", data = buffer1, file_name = "filtered_data.xlsx", mime = excel_mime, 
-                                    help = f"Data from {start_date} to {end_date}, for categories {categories} and {generate_location_text(area, provdist, municity)}")
-                    st.download_button(label = "Unique Order IDs", data = buffer2, file_name = "unique_order_ids.xlsx", mime = excel_mime,
-                                    help = f"Same as 'Filtered Data', but for orders with many items, only one item is kept; {len(df_filtered) - len(df_filtered_no_duplicates)} rows removed")
-                    st.download_button(label = "Duplicate Order IDs", data = buffer3, file_name = "duplicate_order_ids.xlsx", mime = excel_mime,
-                                    help = f"Same as 'Filtered Data', but only the {len(multiple)} orders with more than one item are included")
+                    st.download_button(label = "Filtered Data", data = to_excel_buffer(df_filtered_display, columns), 
+                                       file_name = "filtered_data.xlsx", mime = excel_mime, 
+                                       help = f"Data from {start_date} to {end_date}, for categories {categories} and {generate_location_text(area, provdist, municity)}")
+                    st.download_button(label = "Unique Order IDs", data = to_excel_buffer(df_filtered_no_duplicates_display, columns), 
+                                       file_name = "unique_order_ids.xlsx", mime = excel_mime,
+                                       help = f"Same as 'Filtered Data', but for orders with many items, only one item is kept; {len(df_filtered) - len(df_filtered_no_duplicates)} rows removed")
+                    st.download_button(label = "Duplicate Order IDs", data = to_excel_buffer(df_filtered_duplicate_ids_display, columns), 
+                                       file_name = "duplicate_order_ids.xlsx", mime = excel_mime,
+                                       help = f"Same as 'Filtered Data', but only the {len(multiple)} orders with more than one item are included")
+                else:
+                    st.warning("No columns have been selected. Please select columns before downloading the Excel files.")
             status_placeholder.empty()
+            end = time.perf_counter()
+            print(f"Elapsed time for Downloading Data Buttons: {end - start:.4f} seconds")
 
         elif not date_bool:
             st.warning("Start date must be earlier than end date. Please check your input.")
@@ -858,4 +948,4 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         generate_metric_trends(df_plot_trends)
         generate_heatmap_month_dow(df_plot_trends)
     
-user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj)
+user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb)

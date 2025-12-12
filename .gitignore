@@ -1,0 +1,23 @@
+# Old and scratch notebooks
+UNUSED_old_datasets/
+UNUSED_other_notebooks/
+UNUSED_scratch_notebooks/
+.ipynb_checkpoints/
+
+# Extra datasets
+input/
+output/
+ph_datasets/PH_Adm*.shp
+ph_datasets/gdf*.parquet
+ph_datasets/manila.csv
+
+# Python test files
+local.py
+test.py
+
+# Cache
+__pycache__/
+
+# Secrets
+.env
+.streamlit/secrets.toml
