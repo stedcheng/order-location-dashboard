@@ -469,13 +469,21 @@ def process_data():
     df_merged["ordered_to_processed"] = (df_merged["processed_date"] - df_merged["ordered_date"]).dt.total_seconds() / 3600
     df_merged["processed_to_delivered_returned"] = (df_merged["delivered_returned_date"] - df_merged["processed_date"]).dt.total_seconds() / 3600
     df_merged["ordered_to_delivered_returned"] = df_merged["ordered_to_processed"] + df_merged["processed_to_delivered_returned"]
+    # conditions = [
+    #     df_merged["Area"] == "METRO MANILA",
+    #     ((df_merged["Area"] == "SOUTH LUZON") | (df_merged["Area"] == "NORTH LUZON")) & (df_merged["ProvDist"] != "PALAWAN"),
+    #     (df_merged["ProvDist"] == "PALAWAN") | (df_merged["Area"] == "VISAYAS"),
+    #     df_merged["Area"] == "MINDANAO"
+    # ]
+    # choices = [48, 72, 120, 168]
     conditions = [
         df_merged["Area"] == "METRO MANILA",
-        ((df_merged["Area"] == "SOUTH LUZON") | (df_merged["Area"] == "NORTH LUZON")) & (df_merged["ProvDist"] != "PALAWAN"),
-        (df_merged["ProvDist"] == "PALAWAN") | (df_merged["Area"] == "VISAYAS"),
+        df_merged["Area"] == "SOUTH LUZON",
+        df_merged["Area"] == "NORTH LUZON",
+        df_merged["Area"] == "VISAYAS",
         df_merged["Area"] == "MINDANAO"
     ]
-    choices = [48, 72, 120, 168]
+    choices = [48, 72, 96, 120, 168]
     df_merged["ordered_to_delivered_returned_standard"] = np.select(conditions, choices, default = np.nan)
     df_merged["fast_order"] = np.where(df_merged["ordered_to_delivered_returned"] < df_merged["ordered_to_delivered_returned_standard"], 1, 0)
     df_merged["ordered_hour"] = df_merged["ordered_date"].dt.hour

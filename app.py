@@ -14,6 +14,7 @@ import datetime
 import io
 from process import *
 st.set_page_config(layout = "wide")
+from plotly.subplots import make_subplots
 
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
@@ -731,10 +732,34 @@ def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, d
             st.metric(label = table_display_plot_var[i], value = overall_metric)
         st.dataframe(display_table, hide_index = True, width = "stretch")
 
-    def display_logistics_counts(df):
-        logistics_counts = pd.DataFrame(df["logistics_name"].value_counts().reset_index())
-        logistics_counts.columns = ["Logistics Name", "Count"]
-        st.dataframe(logistics_counts, hide_index = True, width = "stretch")
+    def display_logistics_data(df):
+        logistics_df = df.groupby("logistics_name").agg(
+            col1 = ("id", "size"),
+            col2 = ("processed_to_delivered_returned", "count"),
+            col3 = ("processed_to_delivered_returned", "mean"),
+        ).reset_index()
+        logistics_df.columns = ["Logistics Name", "Count", "Count (With Delivery Time)", "Processed to Delivered (Avg Hrs)"]
+        logistics_df = logistics_df.sort_values(by = "Count", ascending = False)
+        st.dataframe(logistics_df, hide_index = True, width = "stretch")
+
+        logistics_names = logistics_df[logistics_df["Count (With Delivery Time)"] > 0]["Logistics Name"].tolist()
+        color_map = {
+            "J&T Express": "#FD0001",
+            "SPX": "#EE502F",
+            "GoRocky Rider": "#FAD3AB"
+        }
+        fig = make_subplots(rows = 1, cols = len(logistics_names), subplot_titles = logistics_names)
+        for i, ln in enumerate(logistics_names, start = 1):
+            data = df[df["logistics_name"] == ln]["processed_to_delivered_returned"]
+            fig.add_trace(go.Histogram(x = data, xbins = dict(size = 24), name = ln, marker = dict(color = color_map.get(ln))), 
+                          row = 1, col = i)
+        fig.update_layout(
+            title_text = "Histograms of Processed-to-Delivered Durations of Logistics Partners",
+            bargap = 0.1,
+            template = "plotly_white",
+            xaxis_title = "Hours", xaxis2_title = "Hours", xaxis3_title = "Hours", yaxis_title = "Count"
+        )
+        st.plotly_chart(fig, width = "stretch")
 
     def pipeline_country(df_plot, agg_dict, agg_col, 
                          gdf1_proj, internal_plot_var, display_plot_var, ascending_bool):
@@ -822,9 +847,8 @@ def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, d
 
         return map, display_table, df_filtered
     
-    @st.cache_resource
-    def render_map_html(df_plot, agg_dict, agg_col, _gdf1_proj, _gdf2_proj, _gdf3_proj, _gdf4_proj,
-                        provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker):
+    def pipeline_location(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, 
+                          provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker):
         if input_checker["municity"] == 1: 
             map, display_table, df_filtered = pipeline_city(df_plot, agg_dict, agg_col,
                                                             provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
@@ -837,8 +861,11 @@ def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, d
         else: 
             map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
                                                                gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
-        map_html = map._repr_html_()
-        return map_html, display_table, df_filtered
+        return map, display_table, df_filtered
+    
+    @st.cache_data
+    def render_map_html(map_html):
+        return map_html
 
     def filter_duplicate_ids(df_filtered):
         start = time.perf_counter()
@@ -861,23 +888,25 @@ def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, d
         status_placeholder = st.empty()
         if date_bool and st.session_state.generated:
             status_placeholder.write("Generating...")
-            map_html, display_table, df_filtered = render_map_html(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj,
-                                                                   provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker)
+            map, display_table, df_filtered = pipeline_location(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj,
+                                                                     provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker)
+            map_html = render_map_html(map._repr_html_())
             # After filtering for location, remove duplicate ID rows
             multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
                 df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
             
             # Visuals
             st.header("Visuals")
-            col1, col2, col3 = st.columns([0.3, 0.2, 0.5])
+            col1, col2 = st.columns([0.3, 0.7])
             with col1: st.subheader("Metrics Table")
-            with col2: st.subheader("Logistics Count")
-            with col3: st.subheader(generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date))
+            with col2: st.subheader(generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date))
 
-            col1, col2, col3 = st.columns([0.3, 0.2, 0.5])
+            col1, col2 = st.columns([0.3, 0.7])
             with col1: display_overall_metrics_display_table(df_filtered, agg_dict, table_display_plot_var)
-            with col2: display_logistics_counts(df_filtered)
-            with col3: st.components.v1.html(map_html, height = 600)
+            with col2: st.components.v1.html(map_html, height = 600)
+
+            st.subheader("Logistics Count")
+            display_logistics_data(df_filtered)
 
             generate_heatmap_hour_dow(df_filtered)
 
