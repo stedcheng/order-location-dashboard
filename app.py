@@ -366,7 +366,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             (df_plot["category_slug"].isin(categories))
         ]
 
-        ##### 2. PLOT VARIABLE
+        ##### C1b. PLOT VARIABLE / METRIC
         metrics = [
             {
                 "original": "id",
@@ -492,6 +492,177 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         [1.0, "rgb(0, 0, 90)"]
     ]
 
+    display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
+                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug", "sku"]
+    display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered Date",
+                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category", "SKU"]
+
+    ##### C3. PLOTTING FUNCTIONS - TAB 1
+    def pipeline_country(df_plot, agg_dict, agg_col, 
+                         gdf1_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf1_agg = df_plot.groupby("Area").agg(agg_dict)
+        gdf1_agg.columns = agg_col
+        gdf1_proj = gdf1_proj.merge(gdf1_agg, left_on = "Area", right_index = True, how = "left")
+
+        # Make map
+        map = make_map_country(gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
+
+        # Filter display table
+        display_table = gdf1_proj[["Area"] + agg_col]
+        display_table.columns = ["Area"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+        # Filtered data
+        df_filtered = df_plot
+
+        return map, display_table, df_filtered
+    
+    def pipeline_area(df_plot, agg_dict, agg_col,
+                      area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf2_agg = df_plot.groupby("ProvDistPSGC").agg(agg_dict)
+        gdf2_agg.columns = agg_col
+        gdf2_proj = gdf2_proj.merge(gdf2_agg, left_on = "adm2_psgc", right_index = True, how = "left")
+        
+        # Make map
+        map = make_map_area(area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
+
+        # Filter display table
+        display_table = gdf2_proj[gdf2_proj["Area"] == area].copy()
+        display_table = display_table[["adm2_en"] + agg_col]
+        display_table.columns = ["Province"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+        # Filtered data
+        df_filtered = df_plot[df_plot["Area"] == area]
+
+        return map, display_table, df_filtered
+
+    def pipeline_province(df_plot, agg_dict, agg_col, 
+                          provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf3_agg = df_plot.groupby("MuniCityPSGC").agg(agg_dict)
+        gdf3_agg.columns = agg_col
+        gdf3_proj = gdf3_proj.merge(gdf3_agg, left_on = "adm3_psgc", right_index = True, how = "left")
+        
+        # Make map
+        map = make_map_province(provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
+
+        # Filter display table
+        province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
+        display_table = gdf3_proj[gdf3_proj["adm2_psgc"] == province_psgc].copy()
+        display_table = display_table[["adm3_en"] + agg_col]
+        display_table.columns = ["City"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+        # Filtered data
+        df_filtered = df_plot[(df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
+
+        return map, display_table, df_filtered
+    
+    def pipeline_city(df_plot, agg_dict, agg_col,
+                      provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool):
+        # Aggregate
+        gdf4_agg = df_plot.groupby("BgySubmunPSGC").agg(agg_dict)
+        gdf4_agg.columns = agg_col
+        gdf4_proj = gdf4_proj.merge(gdf4_agg, left_on = "adm4_psgc", right_index = True, how = "left")
+        
+        # Make map
+        map = make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
+
+        # Filter display table
+        province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
+        city_psgc = str(gdf3_proj[(gdf3_proj["adm3_en"] == municity) & (gdf3_proj["adm2_psgc"] == province_psgc)]["adm3_psgc"].values[0])
+        display_table = gdf4_proj[gdf4_proj["adm3_psgc"] == city_psgc].copy()
+        display_table = display_table[["adm4_en"] + agg_col]
+        display_table.columns = ["Barangay"] + table_display_plot_var
+        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+
+        # Filtered data
+        df_filtered = df_plot[(df_plot["MuniCity"] == municity) & (df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
+
+        return map, display_table, df_filtered
+    
+    def pipeline_location(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, 
+                          provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker):
+        if input_checker["municity"] == 1: 
+            map, display_table, df_filtered = pipeline_city(df_plot, agg_dict, agg_col,
+                                                            provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
+        elif input_checker["provdist"] == 1: 
+            map, display_table, df_filtered = pipeline_province(df_plot, agg_dict, agg_col, 
+                                                                provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
+        elif input_checker["area"] == 1:
+            map, display_table, df_filtered = pipeline_area(df_plot, agg_dict, agg_col,
+                                                            area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
+        else: 
+            map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
+                                                               gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
+        return map, display_table, df_filtered
+    
+    @st.cache_data
+    def render_map_html(map_html):
+        return map_html
+
+    def filter_duplicate_ids(df_filtered):
+        start = time.perf_counter()
+        df_filtered_no_duplicates = df_filtered.drop_duplicates(keep = "first", subset = ["id"])
+        counts = df_filtered["id"].value_counts()
+        multiple = counts[counts >= 2].index
+        df_filtered_duplicate_ids = df_filtered[df_filtered["id"].isin(multiple)]
+        df_filtered_display = df_filtered[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
+        df_filtered_no_duplicates_display = df_filtered_no_duplicates[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
+        df_filtered_duplicate_ids_display = df_filtered_duplicate_ids[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
+        end = time.perf_counter()
+        print(f"Elapsed time for Filtering Duplicate IDs: {end - start:.4f} seconds")
+        return multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
+            df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display
+
+    def display_overall_metrics_table(df, agg_dict, table_display_plot_var):
+        overall_metrics = df.agg(agg_dict).values
+        for i, overall_metric in enumerate(overall_metrics):
+            if type(overall_metric) in [float, np.float32, np.float64]:
+                overall_metric = overall_metric.round(4)
+            st.metric(label = table_display_plot_var[i], value = overall_metric)
+        if pd.notna(display_table[display_table.columns[1]].head(1).values):
+            st.dataframe(display_table, hide_index = True, width = "stretch")
+        else:
+            st.info("No data found. Please check your filters and try again.")
+
+    def display_logistics_data(df):
+        logistics_df = df.groupby("logistics_name").agg(
+            col1 = ("id", "size"),
+            col2 = ("processed_to_delivered_returned", "count"),
+            col3 = ("processed_to_delivered_returned", "mean"),
+        ).reset_index()
+        logistics_df.columns = ["Logistics Name", "Count", "Count (With Delivery Time)", "Processed to Delivered (Avg Hrs)"]
+        logistics_df = logistics_df.sort_values(by = "Count", ascending = False)
+        if len(logistics_df) > 0:
+            st.dataframe(logistics_df, hide_index = True, width = "stretch")
+
+        logistics_names = logistics_df[logistics_df["Count (With Delivery Time)"] > 0]["Logistics Name"].tolist()
+        color_map = {
+            "J&T Express": "#FD0001",
+            "SPX": "#EE502F",
+            "GoRocky Rider": "#FAD3AB"
+        }
+
+        if len(logistics_names) > 0:
+            fig = make_subplots(rows = 1, cols = len(logistics_names), subplot_titles = logistics_names)
+            for i, ln in enumerate(logistics_names, start = 1):
+                data = df[df["logistics_name"] == ln]["processed_to_delivered_returned"]
+                fig.add_trace(go.Histogram(x = data, xbins = dict(size = 24), name = ln, marker = dict(color = color_map.get(ln))), 
+                              row = 1, col = i)
+                axis_name = f"xaxis{i}" if i > 1 else "xaxis"
+                fig.layout[axis_name].title = "Hours"
+            fig.update_layout(
+                title_text = "Histograms of Processed-to-Delivered Durations of Logistics Partners",
+                bargap = 0.1, template = "plotly_white", yaxis_title = "Count"
+            )
+            st.plotly_chart(fig, width = "stretch")
+        else:
+            st.info("No data found. Please check your filters and try again.")
+
     def generate_heatmap_hour_dow(df):
         # Preprocessing
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
@@ -499,124 +670,95 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         row_totals = heatmap_data.sum(axis = 1)
         col_totals = heatmap_data.sum(axis = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        end = time.perf_counter()
+        print(f"Elapsed time for Data Preprocessing: {end - start:.4f} seconds")
 
-        # Heatmap and "subplots"
-        fig = go.Figure()
-        fig.add_trace(go.Heatmap(
-            x = list(range(24)), y = list(range(7)), z = heatmap_data.values, 
-            colorscale = blue_vibrant,
-            hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}", 
-            xgap = 1, ygap = 1, name = "",
-            xaxis = "x", yaxis = "y2"
-        ))
-        fig.add_trace(go.Bar(
-            x = [0] * len(row_totals), y = list(range(7)), 
-            orientation = "h", showlegend = False, 
-            marker_color = "rgba(0,0,0,0.4)", opacity = 0.6,
-            xaxis = "x2", yaxis = "y"
-        ))
-        fig.add_trace(go.Bar(
-            x = list(range(24)), y = [0] * len(col_totals), 
-            orientation = "v", showlegend = False, 
-            marker_color = "rgba(0,0,0,0.4)", opacity = 0.6, 
-            xaxis = "x", yaxis = "y"  
-        ))
-        fig.update_layout(
-            xaxis = dict(
-                domain = [0, 0.95],
-                anchor = "y2",
-                title = "Hour of Day",
-                side = "top",
-                tickvals = list(range(24))
-            ),
-            xaxis2 = dict(
-                domain = [0.98, 1],
-                showticklabels = False
-            ), 
-            yaxis = dict(
-                domain = [0, 0.05],
-                showticklabels = False,
-            ),
-            yaxis2 = dict(
-                domain = [0.1, 1],
-                tickmode = "array",
-                tickvals = list(range(7)),
-                ticktext = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-                autorange = "reversed",
-                title = "Day of Week"
-            ),
-            title = dict(
-                text = f"Order Heatmap by Hour and Day for {generate_location_text(area, provdist, municity)}",
-                x = 0, y = 0.97, xanchor = "left", yanchor = "top"
-            )
-        )
-        
-        # Annotations
-        threshold = heatmap_long["count"].median()
-        for _, row in heatmap_long.iterrows():
-            color = "white" if row["count"] > threshold else "black"
-            fig.add_annotation(x = row["ordered_hour"], y = row["ordered_dow"], text = row["count"],
-                               showarrow = False, font = {"size" : 16, "color" : color},
-                               xref = "x", yref = "y2")
-        annotation_font = {"size" : 16, "color" : "black"}
-        for hour, total in col_totals.items(): # col totals
-            fig.add_annotation(x = hour, y = 0, text = total, showarrow = False, font = annotation_font, xref = "x", yref = "y")
-        for dow, total in row_totals.items(): # row totals
-            fig.add_annotation(x = 0, y = dow, text = total, showarrow = False, font = annotation_font, xref = "x2", yref = "y2")
-        fig.add_annotation(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False, font = annotation_font, xref = "x2", yref = "y")
-        
-        st.plotly_chart(fig, width = "stretch")
+        if heatmap_long["count"].sum() > 0:
 
-    def generate_heatmap_month_dow(df):
-        heatmap_data = df.groupby(["ordered_dow", "ordered_month"]).size().unstack(fill_value = 0)
-        heatmap_data_normalized = heatmap_data / heatmap_data.sum(axis = 0) # normalize per month (sum = 1 per month)
-        heatmap_data_normalized = (heatmap_data_normalized * 100).round(2)
-        heatmap_long_counts = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
-        heatmap_long_percent = heatmap_data_normalized.reset_index().melt(id_vars = "ordered_dow", value_name = "percent")
-        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on=["ordered_dow", "ordered_month"])
-        heatmap_long["total"] = heatmap_long.groupby("ordered_month")["count"].transform("sum")
-
-        fig = go.Figure(
-            data = go.Heatmap(
-                x = heatmap_long["ordered_month"],
-                y = heatmap_long["ordered_dow"],
-                z = heatmap_long["percent"],
+            # Heatmap and "subplots"
+            start = time.perf_counter()
+            fig = go.Figure()
+            fig.add_trace(go.Heatmap(
+                x = list(range(24)), y = list(range(7)), z = heatmap_data.values, 
                 colorscale = blue_vibrant,
-                customdata = np.stack((heatmap_long["count"], heatmap_long["total"]), axis=-1),
-                hovertemplate = "Month: %{x}<br>Day: %{y}<br>Percent: %{z}% (%{customdata[0]}/%{customdata[1]})",
-                xgap = 1,   # horizontal border
-                ygap = 1,    # vertical border
-                name = ""
+                hovertemplate = "Hour: %{x}:00-%{x}:59<br>Day: %{y}<br>Count: %{z}", 
+                xgap = 1, ygap = 1, name = "",
+                xaxis = "x", yaxis = "y2",
+            ))
+            fig.add_trace(go.Bar(
+                x = [0] * len(row_totals), y = list(range(7)), 
+                orientation = "h", showlegend = False, 
+                marker_color = "rgba(0,0,0,0.4)", opacity = 0.6,
+                xaxis = "x2", yaxis = "y"
+            ))
+            fig.add_trace(go.Bar(
+                x = list(range(24)), y = [0] * len(col_totals), 
+                orientation = "v", showlegend = False, 
+                marker_color = "rgba(0,0,0,0.4)", opacity = 0.6, 
+                xaxis = "x", yaxis = "y"  
+            ))
+            fig.update_layout(
+                xaxis = dict(
+                    domain = [0, 0.95],
+                    anchor = "y2",
+                    title = "Hour of Day",
+                    side = "top",
+                    tickvals = list(range(24))
+                ),
+                xaxis2 = dict(
+                    domain = [0.98, 1],
+                    showticklabels = False
+                ), 
+                yaxis = dict(
+                    domain = [0, 0.05],
+                    showticklabels = False,
+                ),
+                yaxis2 = dict(
+                    domain = [0.1, 1],
+                    tickmode = "array",
+                    tickvals = list(range(7)),
+                    ticktext = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                    autorange = "reversed",
+                    title = "Day of Week"
+                ),
+                title = dict(
+                    text = f"Order Heatmap by Hour and Day for {generate_location_text(area, provdist, municity)}",
+                    x = 0, y = 0.97, xanchor = "left", yanchor = "top"
+                )
             )
-        )
+            end = time.perf_counter()
+            print(f"Elapsed time for Heatmap Hour/DOW - Figure Making: {end - start:.4f} seconds")
+            
+            # Annotations
+            start = time.perf_counter()
+            threshold = heatmap_long["count"].median()
+            colors = np.where(heatmap_long["count"] > threshold, "white", "black")
+            cell_annots = [dict(
+                x = x, y = y, text = text, showarrow = False,
+                font = {"size": 16, "color": c}, xref = "x", yref = "y2"
+            ) for x, y, text, c in zip(
+                heatmap_long["ordered_hour"], heatmap_long["ordered_dow"], heatmap_long["count"], colors
+            )]
+            col_annots = [dict(
+                x = hour, y = 0, text = total, showarrow = False,
+                font = {"size": 16, "color": "black"}, xref = "x", yref = "y"
+            ) for hour, total in col_totals.items()]
+            row_annots = [dict(
+                x = 0, y = dow, text = total, showarrow = False,
+                font = {"size": 16, "color": "black"}, xref = "x2", yref = "y2"
+            ) for dow, total in row_totals.items()]
+            grand_annot = [dict(x = 0, y = 0, text = str(row_totals.sum()), showarrow = False,
+                                font = {"size": 16, "color": "black"}, xref = "x2", yref = "y")]
+            fig.update_layout(annotations = cell_annots + col_annots + row_annots + grand_annot)
+            end = time.perf_counter()
+            print(f"Elapsed time for Heatmap Hour/DOW - Annotations: {end - start:.4f} seconds")
 
-        threshold = heatmap_long["percent"].mean()
-        for _, row in heatmap_long.iterrows():
-            color = "white" if row["percent"] > threshold else "black"
-            fig.add_annotation(
-                x = row["ordered_month"],
-                y = row["ordered_dow"],
-                text = f"{row['percent']:.2f}%",
-                showarrow = False,
-                font = {"size" : 16, "color" : color},
-                # xref = "x",
-                # yref = "y"
-            )
+            st.plotly_chart(fig, width = "stretch")
+        else:
+            st.subheader("Histograms of Processed-to-Delivered Durations of Logistics Partners")
+            st.info("No data found. Please check your filters and try again.")
 
-        fig.update_layout(
-            title = f"Order Heatmap by Month and Day for {generate_location_text(area, provdist, municity)}",
-            xaxis_title = "Month",
-            yaxis_title = "Day of Week",
-            xaxis = {
-                "tickmode" : "array", "tickvals" : list(range(7, 12, 1)), "ticktext" : list(range(7, 12, 1))
-            },
-            yaxis = {
-                "tickmode" : "array", "tickvals" : list(range(7)), 
-                "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
-            }
-        )
-        st.plotly_chart(fig, width = "stretch")
-
+    ##### C4. PLOTTING FUNCTIONS - TAB 2
     def generate_metric_trends(df):
         if municity is not None: df = df[(df["Area"] == area) & (df["ProvDist"] == provdist) & (df["MuniCity"] == municity)]
         elif provdist is not None: df = df[(df["Area"] == area) & (df["ProvDist"] == provdist)]
@@ -676,127 +818,71 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
 
         st.plotly_chart(fig, width = "stretch")
 
-    def pipeline_country(df_plot, agg_dict, agg_col, 
-                         gdf1_proj, internal_plot_var, display_plot_var, ascending_bool):
-        # Aggregate
-        gdf1_agg = df_plot.groupby("Area").agg(agg_dict)
-        gdf1_agg.columns = agg_col
-        gdf1_proj = gdf1_proj.merge(gdf1_agg, left_on = "Area", right_index = True, how = "left")
+    def generate_heatmap_month_dow(df):
+        heatmap_data = df.groupby(["ordered_dow", "ordered_month"]).size().unstack(fill_value = 0)
+        heatmap_data_normalized = heatmap_data / heatmap_data.sum(axis = 0) # normalize per month (sum = 1 per month)
+        heatmap_data_normalized = (heatmap_data_normalized * 100).round(2)
+        heatmap_long_counts = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
+        heatmap_long_percent = heatmap_data_normalized.reset_index().melt(id_vars = "ordered_dow", value_name = "percent")
+        heatmap_long = heatmap_long_counts.merge(heatmap_long_percent, on = ["ordered_dow", "ordered_month"])
+        heatmap_long["total"] = heatmap_long.groupby("ordered_month")["count"].transform("sum")
 
-        # Make map
-        map = make_map_country(gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
+        start = datetime.date(2025, 7, 1)
+        today = datetime.date.today()
+        n_months = (today.year - start.year) * 12 + (today.month - start.month) + 1
+        months = [pd.Period("2025-07", freq = "M") + i for i in range(n_months)]
+        months_formatted = [m.strftime("%Y-%m") for m in months]
 
-        # Filter display table
-        display_table = gdf1_proj[["Area"] + agg_col]
-        display_table.columns = ["Area"] + table_display_plot_var
-        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
+        fig = go.Figure(
+            data = go.Heatmap(
+                x = heatmap_long["ordered_month"],
+                y = heatmap_long["ordered_dow"],
+                z = heatmap_long["percent"],
+                colorscale = blue_vibrant,
+                customdata = np.stack((heatmap_long["count"], heatmap_long["total"]), axis=-1),
+                hovertemplate = "Month: %{x}<br>Day: %{y}<br>Percent: %{z}% (%{customdata[0]}/%{customdata[1]})",
+                xgap = 1,   # horizontal border
+                ygap = 1,    # vertical border
+                name = ""
+            )
+        )
 
-        # Heatmap
-        df_filtered = df_plot
+        # Annotation
+        start = time.perf_counter()
+        threshold = heatmap_long["percent"].mean()
+        colors = np.where(heatmap_long["percent"] > threshold, "white", "black")
+        cell_annots = [dict(
+            x = x, y = y, text = f"{text:.2f}%", showarrow = False, font = {"size": 16, "color": c}
+        ) for x, y, text, c in zip(
+            heatmap_long["ordered_month"], heatmap_long["ordered_dow"], heatmap_long["percent"], colors
+        )]
+        fig.update_layout(annotations = cell_annots)
+        end = time.perf_counter()
+        print(f"Elapsed time for Heatmap Month/DOW - Annotations: {end - start:.4f} seconds")
 
-        return map, display_table, df_filtered
-    
-    def pipeline_area(df_plot, agg_dict, agg_col,
-                      area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool):
-        # Aggregate
-        gdf2_agg = df_plot.groupby("ProvDistPSGC").agg(agg_dict)
-        gdf2_agg.columns = agg_col
-        gdf2_proj = gdf2_proj.merge(gdf2_agg, left_on = "adm2_psgc", right_index = True, how = "left")
-        
-        # Make map
-        map = make_map_area(area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
+        fig.update_layout(
+            title = f"Order Heatmap by Month and Day for {generate_location_text(area, provdist, municity)}",
+            xaxis_title = "Month",
+            yaxis_title = "Day of Week",
+            xaxis = {
+                "tickmode" : "array", "tickvals" : months_formatted, "ticktext" : months_formatted
+            },
+            yaxis = {
+                "tickmode" : "array", "tickvals" : list(range(7)), 
+                "ticktext" : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "autorange" : "reversed"
+            }
+        )
+        st.plotly_chart(fig, width = "stretch")
 
-        # Filter display table
-        display_table = gdf2_proj[gdf2_proj["Area"] == area].copy()
-        display_table = display_table[["adm2_en"] + agg_col]
-        display_table.columns = ["Province"] + table_display_plot_var
-        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
-
-        # Heatmap
-        df_filtered = df_plot[df_plot["Area"] == area]
-
-        return map, display_table, df_filtered
-
-    def pipeline_province(df_plot, agg_dict, agg_col, 
-                          provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool):
-        # Aggregate
-        gdf3_agg = df_plot.groupby("MuniCityPSGC").agg(agg_dict)
-        gdf3_agg.columns = agg_col
-        gdf3_proj = gdf3_proj.merge(gdf3_agg, left_on = "adm3_psgc", right_index = True, how = "left")
-        
-        # Make map
-        map = make_map_province(provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
-
-        # Filter display table
-        province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
-        display_table = gdf3_proj[gdf3_proj["adm2_psgc"] == province_psgc].copy()
-        display_table = display_table[["adm3_en"] + agg_col]
-        display_table.columns = ["City"] + table_display_plot_var
-        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
-
-        # Heatmap
-        df_filtered = df_plot[(df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
-
-        return map, display_table, df_filtered
-    
-    def pipeline_city(df_plot, agg_dict, agg_col,
-                      provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool):
-        # Aggregate
-        gdf4_agg = df_plot.groupby("BgySubmunPSGC").agg(agg_dict)
-        gdf4_agg.columns = agg_col
-        gdf4_proj = gdf4_proj.merge(gdf4_agg, left_on = "adm4_psgc", right_index = True, how = "left")
-        
-        # Make map
-        map = make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
-
-        # Filter display table
-        province_psgc = str(gdf2_proj[gdf2_proj["adm2_en"] == provdist]["adm2_psgc"].values[0])
-        city_psgc = str(gdf3_proj[(gdf3_proj["adm3_en"] == municity) & (gdf3_proj["adm2_psgc"] == province_psgc)]["adm3_psgc"].values[0])
-        display_table = gdf4_proj[gdf4_proj["adm3_psgc"] == city_psgc].copy()
-        display_table = display_table[["adm4_en"] + agg_col]
-        display_table.columns = ["Barangay"] + table_display_plot_var
-        display_table = display_table.sort_values(by = short_display_plot_var, ascending = ascending_bool)
-
-        # Heatmap
-        df_filtered = df_plot[(df_plot["MuniCity"] == municity) & (df_plot["ProvDist"] == provdist) & (df_plot["Area"] == area)]
-
-        return map, display_table, df_filtered
-
-    display_columns_old = ["id", "Area", "ProvDist", "MuniCity", "BgySubmun", "logistics_name", "ordered_date", "processed_date", "delivered_returned_date",
-                                "ordered_to_processed", "processed_to_delivered_returned", "ordered_to_delivered_returned", "category_slug"]
-    display_columns_new = ["ID", "Area", "Province", "City", "Barangay", "Logistics", "Ordered Date", "Processed Date", "Delivered Date",
-                            "Ordered-to-Processed", "Processed-to-Delivered", "Ordered-to-Delivered", "Category"]
-    def filter_duplicate_ids(df_filtered):
-        df_filtered_no_duplicates = df_filtered.drop_duplicates(keep = "first", subset = ["id"])
-        counts = df_filtered["id"].value_counts()
-        multiple = counts[counts >= 2].index
-        df_filtered_duplicate_ids = df_filtered[df_filtered["id"].isin(multiple)]
-        df_filtered_display = df_filtered[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
-        df_filtered_no_duplicates_display = df_filtered_no_duplicates[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
-        df_filtered_duplicate_ids_display = df_filtered_duplicate_ids[display_columns_old].rename(columns = dict(zip(display_columns_old, display_columns_new)))
-        return multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
-            df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display
-
-    # Display
+    ##### C5. DISPLAY
     tab1, tab2 = st.tabs(["Home", "Trends"])
 
     with tab1:
         status_placeholder = st.empty()
         if date_bool and st.session_state.generated:
             status_placeholder.write("Generating...")
-            if input_checker["municity"] == 1: 
-                map, display_table, df_filtered = pipeline_city(df_plot, agg_dict, agg_col,
-                                                                provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_plot_var, display_plot_var, ascending_bool)
-            elif input_checker["provdist"] == 1: 
-                map, display_table, df_filtered = pipeline_province(df_plot, agg_dict, agg_col, 
-                                                                    provdist, gdf2_proj, gdf3_proj, internal_plot_var, display_plot_var, ascending_bool)
-            elif input_checker["area"] == 1:
-                map, display_table, df_filtered = pipeline_area(df_plot, agg_dict, agg_col,
-                                                                area, gdf1_proj, gdf2_proj, internal_plot_var, display_plot_var, ascending_bool)
-            else: 
-                map, display_table, df_filtered = pipeline_country(df_plot, agg_dict, agg_col, 
-                                                                   gdf1_proj, internal_plot_var, display_plot_var, ascending_bool)
-
+            map, display_table, df_filtered = pipeline_location(df_plot, agg_dict, agg_col, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj,
+                                                                     provdist, municity, area, internal_plot_var, display_plot_var, ascending_bool, input_checker)
             # After filtering for location, remove duplicate ID rows
             multiple, df_filtered, df_filtered_no_duplicates, df_filtered_duplicate_ids, \
                 df_filtered_display, df_filtered_no_duplicates_display, df_filtered_duplicate_ids_display = filter_duplicate_ids(df_filtered)
@@ -809,17 +895,17 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 map_text = generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date)
                 st.subheader(map_text)
             col1, col2 = st.columns([0.3, 0.7])
-            with col1: 
-                overall_metrics = df_filtered.agg(agg_dict).values
-                for i, overall_metric in enumerate(overall_metrics):
-                    if type(overall_metric) in [float, np.float32, np.float64]:
-                        overall_metric = overall_metric.round(4)
-                    st.metric(label = table_display_plot_var[i], value = overall_metric)
-                st.dataframe(display_table, hide_index = True, width = "stretch")
+            with col1: display_overall_metrics_table(df_filtered, agg_dict, table_display_plot_var)
             with col2: 
-                st.components.v1.html(map._repr_html_(), height = 600)
-            generate_heatmap_hour_dow(df_filtered_no_duplicates)
+                map_html = render_map_html(map._repr_html_())
+                st.components.v1.html(map_html, height = 600)
 
+            st.subheader("Logistics Count")
+            display_logistics_data(df_filtered)
+
+            generate_heatmap_hour_dow(df_filtered)
+
+            start = time.perf_counter()
             st.header("Download Tables")
             col1, col2 = st.columns([0.7, 0.3])
             with col1:
