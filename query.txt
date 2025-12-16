@@ -1,0 +1,40 @@
+SELECT 
+  o.gr_order_id AS gr_order_id,
+  p1.name AS pharmacy_name,
+  p2.name AS logistics_name,
+  ca.barangay AS barangay,
+  ca.city_municipality AS city_municipality,
+  ca.province AS province,
+  o.receiver_address AS receiver_address,
+  op.formatted_address AS formatted_address,
+  o.ordered_at AS ordered_date,
+  op.processed_date AS processed_date,
+  --o.created_at AS created_date, --remove later
+  o.original_order_id AS original_order_id, -- for redeliveries
+  o.full_name AS full_name,
+  o.receiver_phone AS receiver_phone,
+  o.main_status AS main_status,
+  o.sub_status_code AS sub_status_code,
+  oi.sku AS sku,
+  c.slug AS category_slug,
+  pdu.delivered_time AS delivered_time
+
+FROM public.order_processing AS op
+  INNER JOIN public.partners AS p1 ON op.partner_id = p1.id
+  INNER JOIN public.partners AS p2 ON op.logistics = p2.id
+  INNER JOIN public.customer_addresses AS ca ON op.customer_address_id = ca.id --can be left?
+  INNER JOIN public.orders AS o ON op.order_id = o.id
+  INNER JOIN public.order_items AS oi ON oi.order_id = o.id
+  INNER JOIN public.category_items AS ci ON oi.sku = ci.sku
+  INNER JOIN public.categories AS c ON ci.category_id = c.id
+  LEFT JOIN public.partner_delivery_updates AS pdu ON o.gr_order_id = pdu.customer_reference_no
+
+WHERE 
+  o.ordered_at >= '2025-07-01'::timestamptz 
+  -- AND o.ordered_at < '2025-07-01'::timestamptz
+  --o.created_at >= '2025-06-01'::timestamptz 
+  --AND o.created_at <= '2025-06-30'::timestamptz
+  --AND p2.name IN ('J&T Express', 'SPX')
+  --AND c.slug = 'WL'
+  --AND processed_date is not null
+ORDER BY o.ordered_at;

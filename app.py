@@ -3,48 +3,49 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
-import matplotlib.pyplot as plt
-import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 import folium
 from folium import Choropleth
+from folium.plugins import Fullscreen
 import time
 import re
 import datetime
-import os
 import io
+from process import *
 st.set_page_config(layout = "wide")
+from plotly.subplots import make_subplots
 
 # CONSTANTS
 LOCATION = [13.5, 122.5] # lat, long
 ZOOM_START = 6
-LOCAL = st.secrets.get("LOCAL", False)
+LOCAL = st.secrets.get("LOCAL", True)
 
 ##### A. DATA PREPARATION
 @st.cache_resource()
 def prepare_data():
-    ##### 1. IMPORTING
+    ##### A1. IMPORTING
     gdf1_proj = gpd.read_file("ph_datasets/gdf1_simplified.gpkg")
     gdf2_proj = gpd.read_file("ph_datasets/gdf2_simplified.gpkg")
+    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
     
     # Local
     if LOCAL:
         gdf3_proj = gpd.read_file("ph_datasets/PH_Adm3_MuniCities.shp/PH_Adm3_MuniCities.shp.shp")
         gdf4_proj = gpd.read_file("ph_datasets/PH_Adm4_BgySubMuns.shp/PH_Adm4_BgySubMuns.shp.shp")
-    
+        # ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
+        # df_plot = pd.read_csv("output/df_plot.csv")
+        ph_admin_div_names, df_plot, _, datetime_sh, datetime_sb = process_data()
+
     # Online
     else:
         gdf3_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm3_MuniCities.shp.zip"
         gdf3_proj = gpd.read_file(f"zip+{gdf3_proj_url}", layer = "PH_Adm3_MuniCities.shp")
         gdf4_proj_url = r"https://github.com/altcoder/philippines-psgc-shapefiles/raw/refs/heads/main/dist/PH_Adm4_BgySubMuns.shp.zip"
         gdf4_proj = gpd.read_file(f"zip+{gdf4_proj_url}", layer = "PH_Adm4_BgySubMuns.shp")
-    
-    gdf2_proj = gdf2_proj[~(gdf2_proj["adm2_psgc"] == 1909900000)] 
-    ph_admin_div_names = pd.read_csv("output/ph_admin_div_names.csv")
-    df_plot = pd.read_csv("output/df_plot.csv")
+        ph_admin_div_names, df_plot, _, datetime_sh, datetime_sb  = process_data()
 
-    ##### 2. DATATYPES AND FORMATTING
+    ##### A2. DATATYPES AND FORMATTING
     ph_admin_div_names = ph_admin_div_names.astype(str)
     for col in df_plot.columns[df_plot.columns.str.contains("PSGC")]:
         df_plot[col] = df_plot[col].astype(str)
@@ -63,7 +64,7 @@ def prepare_data():
         for english_col in gdf_proj.columns[gdf_proj.columns.str.contains("_en")]:
             gdf_proj[english_col] = gdf_proj[english_col].str.upper()
 
-    ##### 3. AREA DICTIONARIES
+    ##### A3. AREA DICTIONARIES
     # Region Number -> Area dictionary
     region_area_dict = {
         "NORTH LUZON" : [1, 2, 3, 14], 
@@ -89,7 +90,7 @@ def prepare_data():
     province_area_dict["SAMAR"] = "VISAYAS"
     province_area_dict["COTABATO"] = "MINDANAO"
     
-    ##### 4. PROCESSING
+    ##### A4. PROCESSING
     provdist_to_provdist_dict = {"CITY OF ISABELA (NOT A PROVINCE)" : "BASILAN"}
     municity_to_provdist = pd.read_csv("ph_datasets/municity_to_provdist.csv")
     new_municity_to_provdist_dict = dict(zip(municity_to_provdist["new_municity"], municity_to_provdist["provdist"]))
@@ -200,10 +201,10 @@ def prepare_data():
     # Replace all Roman suffixes (BARANGAY IV or BARANGAY IV-A) with Hindu-Arabic numerals (BARANGAY 4 or BARANGAY 4-A)
     gdf4_proj["adm4_en"] = gdf4_proj["adm4_en"].apply(convert_roman_suffix)    
 
-    return ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot
+    return ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb
 
 start = time.perf_counter()
-ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot = prepare_data()
+ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
 end = time.perf_counter()
 print(f"Elapsed time for Data Preparation: {end - start:.4f} seconds")
 
@@ -223,6 +224,7 @@ def make_map(gdf_geo, internal_area_name, display_area_name, internal_plot_var, 
         fill_color = fill_color,
         legend_name = display_plot_var
     ).add_to(map)
+    Fullscreen().add_to(map)
     end = time.perf_counter()
     print(f"Elapsed time for Map: {end - start:.4f} seconds")
 
@@ -345,24 +347,25 @@ def make_map_city(provdist, municity, gdf2_proj, gdf3_proj, gdf4_proj, internal_
     return map
 
 ##### C. USER INPUT
-def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
+def user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb):
     st.title("Location Data")
+    ##### C1. SIDEBAR
     with st.sidebar:
 
-        ##### 1. DATE & CATEGORY
+        ##### C1a. DATE & CATEGORY
         date_bool = True
         start_date = st.date_input("Start Date", value = (datetime.date.today() - pd.DateOffset(months = 1)).date(),
                                    min_value = pd.to_datetime("2025-07-01"))
         end_date = st.date_input("End Date", value = datetime.date.today(), max_value = datetime.date.today())
         if start_date > end_date:
             date_bool = False
-        category_options = ["ED", "HL", "PE", "WL", "uncategorized"]
+        category_options = ["ED", "HL", "PE", "WL"]
         categories = st.multiselect("Category", category_options, default = category_options)
 
         df_plot_trends = df_plot.copy()
         df_plot = df_plot[
             (df_plot["ordered_date"] >= pd.to_datetime(start_date)) & 
-            (df_plot["ordered_date"] <= pd.to_datetime(end_date)) & 
+            (df_plot["ordered_date"] <= pd.to_datetime(end_date) + pd.Timedelta(days = 1) - pd.Timedelta(seconds = 1)) & 
             (df_plot["category_slug"].isin(categories))
         ]
 
@@ -426,7 +429,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             agg_col.extend(metric.get("extra_cols", []))
             table_display_plot_var.extend(metric.get("extra_cols_short_display", []))
 
-        ##### 3. LOCATION
+        ##### C1c. LOCATION
         input_checker = {"area" : 0, "provdist" : 0, "municity" : 0}
 
         area_list = ph_admin_div_names["Area"].unique()
@@ -450,7 +453,7 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
                 if municity is not None:
                     input_checker["municity"] = 1
 
-        # Session states
+        ##### C1d. SESSION STATES
         if "generated" not in st.session_state: st.session_state.generated = False
         if "last_filters" not in st.session_state: st.session_state.last_filters = {}
         current_filters = {
@@ -467,8 +470,18 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         if st.button("Generate"):
             st.session_state.generated = True
             st.session_state.last_filters = current_filters
-   
-    # Functions
+
+        st.markdown("---")
+        if st.button("Refresh Data", help = "If data looks outdated, click this button."):
+            st.cache_resource.clear()
+            ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb = prepare_data()
+        st.caption(
+            "Date and time of last data retrieval:   \n"
+            f"Sheets: {datetime_sh.strftime("%Y-%m-%d %H:%M:%S")}   \n"
+            f"Supabase: {datetime_sb.strftime("%Y-%m-%d %H:%M:%S")}"
+        )
+
+    ##### C2. HELPER FUNCTIONS AND VARIABLES
     def generate_location_text(area, provdist, municity):
         if input_checker["municity"] == 1: 
             location_text = f"{municity}, {provdist}"
@@ -484,6 +497,12 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         location_text = generate_location_text(area, provdist, municity)
         map_text = f"Map of {display_plot_var} for {location_text} ({start_date} – {end_date})" # insert categories
         return map_text
+    
+    def to_excel_buffer(df, columns):
+        buf = io.BytesIO()
+        df[columns].to_excel(buf, index = False, engine = "xlsxwriter")
+        buf.seek(0)
+        return buf
 
     blue_vibrant = [
         [0.0, "rgb(230, 245, 255)"],
@@ -665,8 +684,10 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
 
     def generate_heatmap_hour_dow(df):
         # Preprocessing
+        start = time.perf_counter()
         heatmap_data = df.groupby(["ordered_dow", "ordered_hour"]).size().unstack(fill_value = 0)
         heatmap_data = heatmap_data.reindex(columns = range(24), fill_value = 0)
+        heatmap_data = heatmap_data.reindex(index = range(7), fill_value = 0)
         row_totals = heatmap_data.sum(axis = 1)
         col_totals = heatmap_data.sum(axis = 0)
         heatmap_long = heatmap_data.reset_index().melt(id_vars = "ordered_dow", value_name = "count")
@@ -891,9 +912,8 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             st.header("Visuals")
             col1, col2 = st.columns([0.3, 0.7])
             with col1: st.subheader("Metrics Table")
-            with col2: 
-                map_text = generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date)
-                st.subheader(map_text)
+            with col2: st.subheader(generate_map_text(area, provdist, municity, display_plot_var, start_date, end_date))
+
             col1, col2 = st.columns([0.3, 0.7])
             with col1: display_overall_metrics_table(df_filtered, agg_dict, table_display_plot_var)
             with col2: 
@@ -908,26 +928,25 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
             start = time.perf_counter()
             st.header("Download Tables")
             col1, col2 = st.columns([0.7, 0.3])
-            with col1:
-                columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
-                if len(columns) > 0:
-                    buffer1, buffer2, buffer3 = io.BytesIO(), io.BytesIO(), io.BytesIO()
-                    df_filtered_display[columns].to_excel(buffer1, index = False)
-                    df_filtered_no_duplicates_display[columns].to_excel(buffer2, index = False)
-                    df_filtered_duplicate_ids_display[columns].to_excel(buffer3, index = False)
-                    buffer1.seek(0); buffer2.seek(0); buffer3.seek(0)
-                else: 
-                    st.warning("No columns have been selected. Please select columns before downloading the Excel files.")
+            with col1: columns = st.multiselect("Columns to Display", display_columns_new, default = display_columns_new)
+
             with col2:
                 if len(columns) > 0:
                     excel_mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    st.download_button(label = "Filtered Data", data = buffer1, file_name = "filtered_data.xlsx", mime = excel_mime, 
-                                    help = f"Data from {start_date} to {end_date}, for categories {categories} and {generate_location_text(area, provdist, municity)}")
-                    st.download_button(label = "Unique Order IDs", data = buffer2, file_name = "unique_order_ids.xlsx", mime = excel_mime,
-                                    help = f"Same as 'Filtered Data', but for orders with many items, only one item is kept; {len(df_filtered) - len(df_filtered_no_duplicates)} rows removed")
-                    st.download_button(label = "Duplicate Order IDs", data = buffer3, file_name = "duplicate_order_ids.xlsx", mime = excel_mime,
-                                    help = f"Same as 'Filtered Data', but only the {len(multiple)} orders with more than one item are included")
+                    st.download_button(label = "Filtered Data", data = to_excel_buffer(df_filtered_display, columns), 
+                                       file_name = "filtered_data.xlsx", mime = excel_mime, 
+                                       help = f"Data from {start_date} to {end_date}, for categories {categories} and {generate_location_text(area, provdist, municity)}")
+                    st.download_button(label = "Unique Order IDs", data = to_excel_buffer(df_filtered_no_duplicates_display, columns), 
+                                       file_name = "unique_order_ids.xlsx", mime = excel_mime,
+                                       help = f"Same as 'Filtered Data', but for orders with many items, only one item is kept; {len(df_filtered) - len(df_filtered_no_duplicates)} rows removed")
+                    st.download_button(label = "Duplicate Order IDs", data = to_excel_buffer(df_filtered_duplicate_ids_display, columns), 
+                                       file_name = "duplicate_order_ids.xlsx", mime = excel_mime,
+                                       help = f"Same as 'Filtered Data', but only the {len(multiple)} orders with more than one item are included")
+                else:
+                    st.warning("No columns have been selected. Please select columns before downloading the Excel files.")
             status_placeholder.empty()
+            end = time.perf_counter()
+            print(f"Elapsed time for Downloading Data Buttons: {end - start:.4f} seconds")
 
         elif not date_bool:
             st.warning("Start date must be earlier than end date. Please check your input.")
@@ -944,4 +963,4 @@ def user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj):
         generate_metric_trends(df_plot_trends)
         generate_heatmap_month_dow(df_plot_trends)
     
-user_input(df_plot, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj)
+user_input(ph_admin_div_names, gdf1_proj, gdf2_proj, gdf3_proj, gdf4_proj, df_plot, datetime_sh, datetime_sb)
